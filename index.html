@@ -214,7 +214,7 @@ function downloadPDF(project, schedule, quote) {
     const r = getRole(item.roleId);
     const amt = r?.isContingency ? prodSub*0.05 : calcLine(item);
     const qtyStr = r?.isContingency ? "5% auto"
-      : (item.unit==="일" ? `${item.headcount||1}명×${item.days||item.qty||1}일×${item.utilization??100}%` : `${item.headcount||1}×${item.days||item.qty||1}${item.unit}`);
+      : (item.unit==="일" ? `${item.headcount||1}명×${item.utilization??100}%×${item.days||item.qty||1}일` : `${item.headcount||1}×${item.days||item.qty||1}${item.unit}`);
     return `<tr><td>${r?.categoryLabel||""}</td><td>${item.label}</td><td>${qtyStr}</td><td>${r?.isContingency?"-":"₩"+fmt(item.rate)}</td><td>₩${fmt(amt)}</td></tr>`;
   }).join("");
 
@@ -254,8 +254,8 @@ tr:nth-child(even) td{background:#f9f9f9}
 ${ganttHTML}
 ${schedule.phases.length>0?`<div class="section"><div class="section-title">Schedule Details</div><table><thead><tr><th>Category</th><th>Phase</th><th>Start</th><th>End</th><th>Days</th><th>Assignee</th></tr></thead><tbody>${schedRows}</tbody></table></div>`:""}
 ${quote.items.length>0?`<div class="section"><div class="section-title">Cost Breakdown</div>
-<p style="font-size:10px;color:#888;margin-bottom:8px">소계 = 인원 × 작업일수 × 투입률 × 단가</p>
-<table><thead><tr><th>Category</th><th>Item</th><th>인원×일수×투입률</th><th>Unit Rate</th><th>Amount</th></tr></thead><tbody>${quoteRows}</tbody></table>
+<p style="font-size:10px;color:#888;margin-bottom:8px">소계 = 인원 × 투입률 × 일수 × 단가</p>
+<table><thead><tr><th>Category</th><th>Item</th><th>인원×투입률×일수</th><th>Unit Rate</th><th>Amount</th></tr></thead><tbody>${quoteRows}</tbody></table>
 <div style="margin-top:20px"><div class="totals">
 <div class="total-row"><span>Subtotal</span><span>₩${fmt(sub)}</span></div>
 ${Number(quote.discountPct)>0?`<div class="total-row"><span>Discount (${quote.discountPct}%)</span><span>-₩${fmt(disc)}</span></div>`:""}
@@ -636,7 +636,7 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
                 <>
                   {/* 헤더 */}
                   <div style={{display:"grid",gridTemplateColumns:"1.8fr 55px 55px 55px 90px 80px auto",gap:5,marginBottom:5,padding:"0 2px"}}>
-                    {["항목","인원","작업일수","투입률(%)","단가(₩/일)","소계",""].map((h,i)=>(
+                    {["항목","인원","투입률(%)","일수","단가(₩/일)","소계",""].map((h,i)=>(
                       <span key={i} style={{fontSize:9,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",textAlign:i>0&&i<6?"center":"left"}}>{h}</span>
                     ))}
                   </div>
@@ -661,10 +661,10 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
                             <>
                               {/* 인원 */}
                               <input type="number" min="1" value={item.headcount??1} onChange={e=>updateItem(item.id,"headcount",e.target.value)} style={inS} />
-                              {/* 작업일수 */}
-                              <input type="number" min="1" value={item.days??item.qty??1} onChange={e=>updateItem(item.id,"days",e.target.value)} style={inS} />
                               {/* 투입률 */}
                               <input type="number" min="1" max="100" value={item.utilization??100} onChange={e=>updateItem(item.id,"utilization",e.target.value)} style={inS} />
+                              {/* 일수 */}
+                              <input type="number" min="1" value={item.days??item.qty??1} onChange={e=>updateItem(item.id,"days",e.target.value)} style={inS} />
                               {/* 단가 */}
                               <input type="number" value={item.rate} onChange={e=>updateItem(item.id,"rate",e.target.value)}
                                 disabled={!userCanEditRate}
@@ -680,7 +680,7 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
                   </div>
                   {/* 공식 안내 */}
                   <div style={{marginTop:8,fontSize:10,color:"#9CA3AF",textAlign:"right"}}>
-                    소계 = 인원 × 작업일수 × (투입률 ÷ 100) × 단가
+                    소계 = 인원 × 투입률(%) ÷ 100 × 일수 × 단가
                   </div>
                 </>
               )}
@@ -824,7 +824,7 @@ function SummaryTab({project, schedule, quote}) {
                     const r   = getRole(item.roleId);
                     const amt = r?.isContingency ? prodSub*0.05 : calcLine(item);
                     const detail = (!r?.isContingency && item.unit==="일")
-                      ? `${item.headcount||1}명 × ${item.days||item.qty||1}일 × ${item.utilization??100}%`
+                      ? `${item.headcount||1}명 × ${item.utilization??100}% × ${item.days||item.qty||1}일`
                       : (!r?.isContingency ? `${item.headcount||1}명 × ${item.days||item.qty||1}${item.unit}` : "");
                     return (
                       <div key={item.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"4px 0",borderBottom:"1px solid #F3F4F6"}}>
