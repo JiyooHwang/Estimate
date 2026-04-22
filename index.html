@@ -468,14 +468,9 @@ function GanttChart({phases, ganttStart, ganttEnd, onUpdate}) {
 }
 
 /* ── 스케줄 탭 ────────────────────────────────────────────────────────── */
-function ScheduleTab({schedule, onChange, projectStart, projectDeadline}) {
-  const defStart = projectStart || new Date().toISOString().slice(0,10);
-  const defEnd   = projectDeadline || addDays(defStart, 60);
-  const [ganttStart, setGanttStart] = useState(defStart);
-  const [ganttEnd,   setGanttEnd]   = useState(defEnd);
-
-  useEffect(() => { if (projectStart)   setGanttStart(projectStart);   }, [projectStart]);
-  useEffect(() => { if (projectDeadline) setGanttEnd(projectDeadline); }, [projectDeadline]);
+function ScheduleTab({schedule, onChange, projectStart, projectDeadline, ganttStart, setGanttStart, ganttEnd, setGanttEnd}) {
+  useEffect(() => { if (projectStart && !ganttStart)   setGanttStart(projectStart);   }, [projectStart]);
+  useEffect(() => { if (projectDeadline && !ganttEnd)  setGanttEnd(projectDeadline);  }, [projectDeadline]);
 
   const updatePhase     = (id,f,v) => onChange("phases", schedule.phases.map(p=>p.id===id?{...p,[f]:v}:p));
   const updatePhaseDates = (id,s,e) => onChange("phases", schedule.phases.map(p=>p.id===id?{...p,startDate:s,endDate:e}:p));
@@ -635,7 +630,7 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
               : (
                 <>
                   {/* 헤더 */}
-                  <div style={{display:"grid",gridTemplateColumns:"1.8fr 55px 55px 55px 90px 80px auto",gap:5,marginBottom:5,padding:"0 2px"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1.8fr 55px 55px 55px 90px 80px 28px",gap:5,marginBottom:5,padding:"0 2px"}}>
                     {["항목","인원","투입률(%)","일수","단가(₩/일)","소계",""].map((h,i)=>(
                       <span key={i} style={{fontSize:9,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",textAlign:i>0&&i<6?"center":"left"}}>{h}</span>
                     ))}
@@ -647,7 +642,7 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
                       const lineTotal = isC ? prodSub*0.05 : calcLine(item);
                       const linked = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===item.roleId)?.[0];
                       return (
-                        <div key={item.id} style={{display:"grid",gridTemplateColumns:"1.8fr 55px 55px 55px 90px 80px auto",gap:5,alignItems:"center",padding:"7px 8px",borderRadius:8,background:`${cat.color}0a`,border:`1px solid ${cat.color}18`}}>
+                        <div key={item.id} style={{display:"grid",gridTemplateColumns:"1.8fr 55px 55px 55px 90px 80px 28px",gap:5,alignItems:"center",padding:"7px 8px",borderRadius:8,background:`${cat.color}0a`,border:`1px solid ${cat.color}18`}}>
                           {/* 항목명 */}
                           <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
                             <div style={{width:5,height:5,borderRadius:1,background:cat.color,flexShrink:0}} />
@@ -866,6 +861,8 @@ function App() {
   const [quote,    setQuote]    = useState(DEFAULT_QUOTE);
   const [projects, setProjects] = useState([]);
   const [showSaved,setShowSaved]= useState(false);
+  const [ganttStart, setGanttStart] = useState(() => new Date().toISOString().slice(0,10));
+  const [ganttEnd,   setGanttEnd]   = useState(() => addDays(new Date().toISOString().slice(0,10), 60));
 
   const updateProject  = useCallback((f,v)=>setProject(p=>({...p,[f]:v})),[]);
   const updateSchedule = useCallback((f,v)=>{
@@ -968,7 +965,7 @@ function App() {
 
         {/* 탭 콘텐츠 */}
         {activeTab==="info"     && <ProjectInfoTab project={project} onChange={updateProject} />}
-        {activeTab==="schedule" && <ScheduleTab schedule={schedule} onChange={updateSchedule} projectStart={project.startDate} projectDeadline={project.deadline} />}
+        {activeTab==="schedule" && <ScheduleTab schedule={schedule} onChange={updateSchedule} projectStart={project.startDate} projectDeadline={project.deadline} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} />}
         {activeTab==="quote"    && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={true} />}
         {activeTab==="summary"  && <SummaryTab project={project} schedule={schedule} quote={quote} />}
 
