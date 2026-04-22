@@ -112,15 +112,22 @@ function syncQuoteFromSchedule(schedulePhases, quoteItems) {
     const phase = schedulePhases.find(p=>p.phaseId===linkedPhaseId);
     if (!phase?.startDate || !phase?.endDate) return item;
     const days = daysBetween(phase.startDate, phase.endDate);
-    return days > 0 ? {...item, qty: days} : item;
+    return days > 0 ? {...item, days} : item;
   });
 }
 
 function downloadPDF(project, schedule, quote) {
   const win = window.open("","_blank");
   if (!win) { alert("팝업 차단을 해제하세요."); return; }
-  const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+Number(i.qty)*Number(i.rate),0);
-  const sub = quote.items.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:Number(i.qty)*Number(i.rate)); },0);
+
+  const calcLine = item => {
+    const role = getRole(item.roleId);
+    if (role?.isContingency) return 0;
+    if (item.unit!=="일") return Number(item.headcount||1)*Number(item.days||item.qty||1)*Number(item.rate||0);
+    return Number(item.headcount||1)*Number(item.days||item.qty||1)*(Number(item.utilization??100)/100)*Number(item.rate||0);
+  };
+  const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+calcLine(i),0);
+  const sub = quote.items.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
   const disc = sub*(Number(quote.discountPct)/100);
   const afterDisc = sub-disc;
   const vat = afterDisc*(quote.includeVat?0.1:0);
@@ -128,104 +135,87 @@ function downloadPDF(project, schedule, quote) {
   const fmt = n => new Intl.NumberFormat("ko-KR").format(Math.round(n));
   const today = new Date().toLocaleDateString("ko-KR");
 
-  /* ── 간트 바 SVG 생성 ── */
+  /* ── 간트 SVG (바 형태 개선) ── */
   const ganttHTML = (() => {
-    if (schedule.phases.length === 0) return "";
     const withDates = schedule.phases.filter(p=>p.startDate&&p.endDate);
     if (withDates.length === 0) return "";
 
-    const allStarts = withDates.map(p=>new Date(p.startDate).getTime());
-    const allEnds   = withDates.map(p=>new Date(p.endDate).getTime());
-    const gStart = Math.min(...allStarts);
-    const gEnd   = Math.max(...allEnds);
+    const gStart = Math.min(...withDates.map(p=>new Date(p.startDate).getTime()));
+    const gEnd   = Math.max(...withDates.map(p=>new Date(p.endDate).getTime()));
     const totalMs = gEnd - gStart || 1;
 
-    // Month ticks
     const months = [];
-    let cur = new Date(gStart);
-    cur.setDate(1);
-    const endD = new Date(gEnd);
-    while (cur <= endD) {
+    let cur = new Date(gStart); cur.setDate(1);
+    while (cur.getTime() <= gEnd) {
       months.push(new Date(cur));
       cur = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
     }
 
-    const LABEL_W = 140;
-    const BAR_AREA = 440;
-    const ROW_H = 22;
-    const HDR_H = 20;
+    const LABEL_W = 150, BAR_AREA = 430, ROW_H = 24, HDR_H = 22, W = LABEL_W + BAR_AREA;
 
-    // Build rows grouped by category
     const rows = [];
     PHASE_CATEGORIES.forEach(cat=>{
-      const catPhases = schedule.phases.filter(p=>getPhase(p.phaseId)?.categoryId===cat.id);
-      if (catPhases.length===0) return;
-      rows.push({type:"cat", cat});
-      catPhases.forEach(p=>rows.push({type:"phase", p, cat}));
+      const cp = schedule.phases.filter(p=>getPhase(p.phaseId)?.categoryId===cat.id);
+      if (!cp.length) return;
+      rows.push({type:"cat",cat});
+      cp.forEach(p=>rows.push({type:"phase",p,cat}));
     });
 
-    const totalH = HDR_H + rows.length * ROW_H + 8;
-    const W = LABEL_W + BAR_AREA;
+    const totalH = HDR_H + rows.length * ROW_H + 4;
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${totalH}" style="display:block;font-family:Arial,sans-serif;">`;
+    svg += `<rect width="${W}" height="${totalH}" fill="#fff" rx="4" stroke="#E5E7EB" stroke-width="1"/>`;
+    svg += `<rect x="${LABEL_W}" y="0" width="${BAR_AREA}" height="${HDR_H}" fill="#F4F5F7"/>`;
+    svg += `<line x1="${LABEL_W}" y1="0" x2="${LABEL_W}" y2="${totalH}" stroke="#E5E7EB" stroke-width="1"/>`;
 
-    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${totalH}" style="font-family:'Noto Sans KR',sans-serif;display:block;">`;
-
-    // BG
-    svg += `<rect width="${W}" height="${totalH}" fill="#f8f9fa" rx="6"/>`;
-
-    // Month header bg
-    svg += `<rect x="${LABEL_W}" y="0" width="${BAR_AREA}" height="${HDR_H}" fill="#EAEDF0"/>`;
-
-    // Month lines + labels
     months.forEach(m=>{
-      const xPct = (m.getTime()-gStart)/totalMs;
-      const x = LABEL_W + xPct*BAR_AREA;
-      svg += `<line x1="${x}" y1="${HDR_H}" x2="${x}" y2="${totalH}" stroke="#E5E7EB" stroke-width="1"/>`;
-      const label = `${m.getFullYear().toString().slice(2)}/${String(m.getMonth()+1).padStart(2,"0")}`;
-      svg += `<text x="${x+3}" y="${HDR_H-5}" font-size="8" fill="#6B7280" font-weight="600">${label}</text>`;
+      const x = (LABEL_W + ((m.getTime()-gStart)/totalMs)*BAR_AREA).toFixed(1);
+      if (parseFloat(x) > LABEL_W) svg += `<line x1="${x}" y1="${HDR_H}" x2="${x}" y2="${totalH}" stroke="#F0F0F0" stroke-width="1"/>`;
+      const lbl = `${m.getFullYear().toString().slice(2)}/${String(m.getMonth()+1).padStart(2,"0")}`;
+      svg += `<text x="${(parseFloat(x)+3).toFixed(1)}" y="${HDR_H-6}" font-size="8" fill="#6B7280" font-weight="600">${lbl}</text>`;
     });
 
-    // Rows
     rows.forEach((row, ri) => {
       const y = HDR_H + ri * ROW_H;
       if (row.type==="cat") {
-        svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${row.cat.color}18"/>`;
-        svg += `<text x="8" y="${y+ROW_H-7}" font-size="8" fill="${row.cat.color}" font-weight="800" text-transform="uppercase">${row.cat.label.toUpperCase()}</text>`;
+        svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${row.cat.color}20"/>`;
+        svg += `<text x="8" y="${y+ROW_H-7}" font-size="9" fill="${row.cat.color}" font-weight="700">${row.cat.label.toUpperCase()}</text>`;
+        svg += `<line x1="0" y1="${y+ROW_H}" x2="${W}" y2="${y+ROW_H}" stroke="#E5E7EB" stroke-width="0.5"/>`;
       } else {
-        const {p, cat} = row;
+        const {p} = row;
         const ph = getPhase(p.phaseId);
-        svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${ri%2===0?"#FFFFFF":"#F8F9FA"}"/>`;
-        svg += `<text x="${LABEL_W-4}" y="${y+ROW_H-7}" font-size="9" fill="#374151" text-anchor="end">${ph?.label||""}</text>`;
+        svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${ri%2===0?"#fff":"#FAFAFA"}"/>`;
+        svg += `<line x1="0" y1="${y+ROW_H}" x2="${W}" y2="${y+ROW_H}" stroke="#F3F4F6" stroke-width="0.5"/>`;
+        svg += `<text x="${LABEL_W-6}" y="${y+ROW_H-8}" font-size="9" fill="#374151" text-anchor="end">${ph?.label||""}</text>`;
         if (p.startDate && p.endDate) {
           const lPct = (new Date(p.startDate).getTime()-gStart)/totalMs;
           const wPct = (new Date(p.endDate).getTime()-new Date(p.startDate).getTime())/totalMs;
-          const bx = LABEL_W + lPct*BAR_AREA;
-          const bw = Math.max(3, wPct*BAR_AREA);
-          const dur = Math.round((new Date(p.endDate)-new Date(p.startDate))/DAY_MS);
-          svg += `<rect x="${bx}" y="${y+3}" width="${bw}" height="${ROW_H-7}" rx="3" fill="${ph?.color||"#888"}" opacity="0.85"/>`;
-          if (bw > 22) svg += `<text x="${bx+bw/2}" y="${y+ROW_H-8}" font-size="7.5" fill="rgba(0,0,0,0.7)" font-weight="700" text-anchor="middle">${dur}d</text>`;
+          const bx = (LABEL_W + lPct*BAR_AREA).toFixed(1);
+          const bw = Math.max(4, wPct*BAR_AREA).toFixed(1);
+          const dur = Math.round((new Date(p.endDate)-new Date(p.startDate))/86400000);
+          svg += `<rect x="${bx}" y="${y+4}" width="${bw}" height="${ROW_H-9}" rx="3" fill="${ph?.color||"#888"}" opacity="0.9"/>`;
+          if (parseFloat(bw)>28) svg += `<text x="${(parseFloat(bx)+parseFloat(bw)/2).toFixed(1)}" y="${y+ROW_H-8}" font-size="7.5" fill="white" font-weight="700" text-anchor="middle">${dur}d</text>`;
+          if (p.assignee && parseFloat(bw)>50) svg += `<text x="${(parseFloat(bx)+parseFloat(bw)+4).toFixed(1)}" y="${y+ROW_H-8}" font-size="7" fill="#9CA3AF">${p.assignee}</text>`;
         }
       }
     });
-
     svg += `</svg>`;
-    return `<div class="section">
-      <div class="section-title">Production Schedule — Gantt</div>
-      ${svg}
-    </div>`;
+    return `<div class="section"><div class="section-title">Production Schedule — Gantt Chart</div><div style="overflow:hidden;border-radius:6px;border:1px solid #E5E7EB">${svg}</div></div>`;
   })();
 
   /* ── 스케줄 테이블 ── */
   const schedRows = schedule.phases.map(p=>{
     const ph = ALL_PHASES.find(x=>x.id===p.phaseId);
-    const days = p.startDate&&p.endDate ? Math.round((new Date(p.endDate)-new Date(p.startDate))/DAY_MS) : "-";
+    const days = p.startDate&&p.endDate ? Math.round((new Date(p.endDate)-new Date(p.startDate))/86400000) : "-";
     return `<tr><td>${ph?.categoryLabel||""}</td><td>${ph?.label||p.phaseId}</td><td>${p.startDate||"-"}</td><td>${p.endDate||"-"}</td><td>${days!=="-"?days+"일":"-"}</td><td>${p.assignee||"-"}</td></tr>`;
   }).join("");
 
   /* ── 견적 테이블 ── */
   const quoteRows = quote.items.map(item=>{
     const r = getRole(item.roleId);
-    const amt = r?.isContingency ? prodSub*0.05 : Number(item.qty)*Number(item.rate);
-    return `<tr><td>${r?.categoryLabel||""}</td><td>${item.label}</td><td>${r?.isContingency?"5% auto":item.qty+item.unit}</td><td>${r?.isContingency?"-":"₩"+fmt(item.rate)}</td><td>₩${fmt(amt)}</td></tr>`;
+    const amt = r?.isContingency ? prodSub*0.05 : calcLine(item);
+    const qtyStr = r?.isContingency ? "5% auto"
+      : (item.unit==="일" ? `${item.headcount||1}명×${item.days||item.qty||1}일×${item.utilization??100}%` : `${item.headcount||1}×${item.days||item.qty||1}${item.unit}`);
+    return `<tr><td>${r?.categoryLabel||""}</td><td>${item.label}</td><td>${qtyStr}</td><td>${r?.isContingency?"-":"₩"+fmt(item.rate)}</td><td>₩${fmt(amt)}</td></tr>`;
   }).join("");
 
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${project.name||"견적서"} - LOCUS</title>
@@ -263,7 +253,9 @@ tr:nth-child(even) td{background:#f9f9f9}
 </div></div>
 ${ganttHTML}
 ${schedule.phases.length>0?`<div class="section"><div class="section-title">Schedule Details</div><table><thead><tr><th>Category</th><th>Phase</th><th>Start</th><th>End</th><th>Days</th><th>Assignee</th></tr></thead><tbody>${schedRows}</tbody></table></div>`:""}
-${quote.items.length>0?`<div class="section"><div class="section-title">Cost Breakdown</div><table><thead><tr><th>Category</th><th>Item</th><th>Qty</th><th>Unit Rate</th><th>Amount</th></tr></thead><tbody>${quoteRows}</tbody></table>
+${quote.items.length>0?`<div class="section"><div class="section-title">Cost Breakdown</div>
+<p style="font-size:10px;color:#888;margin-bottom:8px">소계 = 인원 × 작업일수 × 투입률 × 단가</p>
+<table><thead><tr><th>Category</th><th>Item</th><th>인원×일수×투입률</th><th>Unit Rate</th><th>Amount</th></tr></thead><tbody>${quoteRows}</tbody></table>
 <div style="margin-top:20px"><div class="totals">
 <div class="total-row"><span>Subtotal</span><span>₩${fmt(sub)}</span></div>
 ${Number(quote.discountPct)>0?`<div class="total-row"><span>Discount (${quote.discountPct}%)</span><span>-₩${fmt(disc)}</span></div>`:""}
@@ -583,31 +575,46 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
   const addItem = roleId => {
     const role = getRole(roleId);
     if (!role) return;
-    onChange("items", [...quote.items, {id:Date.now(),roleId:role.id,label:role.label,qty:1,unit:role.unit,rate:role.defaultRate,categoryId:role.categoryId}]);
+    onChange("items", [...quote.items, {
+      id:Date.now(), roleId:role.id, label:role.label,
+      headcount:1, days:1, utilization:100, rate:role.defaultRate,
+      unit:role.unit, categoryId:role.categoryId
+    }]);
   };
   const updateItem = (id,field,value) => {
     onChange("items", quote.items.map(item=>{
       if (item.id!==id) return item;
-      if (field==="roleId") { const r=getRole(value); return {...item,roleId:value,label:r?.label||item.label,unit:r?.unit||item.unit,rate:r?.defaultRate??item.rate,categoryId:r?.categoryId||item.categoryId}; }
+      if (field==="roleId") {
+        const r=getRole(value);
+        return {...item,roleId:value,label:r?.label||item.label,unit:r?.unit||item.unit,rate:r?.defaultRate??item.rate,categoryId:r?.categoryId||item.categoryId};
+      }
       return {...item,[field]:value};
     }));
   };
   const removeItem = id => onChange("items", quote.items.filter(i=>i.id!==id));
 
-  const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+Number(i.qty)*Number(i.rate),0);
-  const sub = quote.items.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:Number(i.qty)*Number(i.rate)); },0);
+  // lineTotal = headcount × days × (utilization/100) × rate
+  const calcLine = item => {
+    const role = getRole(item.roleId);
+    if (role?.isContingency) return 0;
+    if (item.unit!=="일") return Number(item.headcount||1)*Number(item.days||1)*Number(item.rate||0);
+    return Number(item.headcount||1)*Number(item.days||1)*(Number(item.utilization??100)/100)*Number(item.rate||0);
+  };
+
+  const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+calcLine(i),0);
+  const sub = quote.items.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
   const disc = sub*(Number(quote.discountPct)/100);
   const afterDisc = sub-disc;
   const vat = afterDisc*(quote.includeVat?0.1:0);
   const total = afterDisc+vat;
-  const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:7,padding:"6px 8px",color:"#1A1A2E",fontSize:12,outline:"none"};
+  const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:7,padding:"5px 6px",color:"#1A1A2E",fontSize:11,outline:"none",textAlign:"center",width:"100%"};
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {ROLE_CATEGORIES.map(cat=>{
-        const catItems  = quote.items.filter(i=>i.categoryId===cat.id);
-        const catSub    = catItems.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:Number(i.qty)*Number(i.rate)); },0);
-        const addable   = cat.roles.filter(r=>!quote.items.find(i=>i.roleId===r.id));
+        const catItems = quote.items.filter(i=>i.categoryId===cat.id);
+        const catSub   = catItems.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
+        const addable  = cat.roles.filter(r=>!quote.items.find(i=>i.roleId===r.id));
         return (
           <Card key={cat.id} style={{borderColor:`${cat.color}33`,padding:"18px 22px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -622,44 +629,58 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
                 ))}
               </div>
             </div>
+
             {catItems.length===0
               ? <div style={{fontSize:12,color:"#6B7280",padding:"4px 0"}}>위 버튼으로 항목을 추가하세요</div>
               : (
                 <>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 70px 60px 110px 90px auto",gap:6,marginBottom:6,padding:"0 2px"}}>
-                    {["항목","수량","단위","단가 (₩)","소계",""].map((h,i)=>(
-                      <span key={i} style={{fontSize:10,color:"#6B7280",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</span>
+                  {/* 헤더 */}
+                  <div style={{display:"grid",gridTemplateColumns:"1.8fr 55px 55px 55px 90px 80px auto",gap:5,marginBottom:5,padding:"0 2px"}}>
+                    {["항목","인원","작업일수","투입률(%)","단가(₩/일)","소계",""].map((h,i)=>(
+                      <span key={i} style={{fontSize:9,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",textAlign:i>0&&i<6?"center":"left"}}>{h}</span>
                     ))}
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
                     {catItems.map(item=>{
                       const role = getRole(item.roleId);
                       const isC  = role?.isContingency;
-                      const lineTotal = isC ? prodSub*0.05 : Number(item.qty)*Number(item.rate);
+                      const lineTotal = isC ? prodSub*0.05 : calcLine(item);
                       const linked = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===item.roleId)?.[0];
                       return (
-                        <div key={item.id} style={{display:"grid",gridTemplateColumns:"1fr 70px 60px 110px 90px auto",gap:6,alignItems:"center",padding:"7px 8px",borderRadius:8,background:`${cat.color}0a`,border:`1px solid ${cat.color}18`}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <div style={{width:6,height:6,borderRadius:1,background:cat.color,flexShrink:0}} />
-                            <input value={item.label} onChange={e=>updateItem(item.id,"label",e.target.value)} style={{...inS,flex:1}} />
-                            {linked && <span title="스케줄 연동" style={{fontSize:9,color:"#059669",border:"1px solid #05966955",borderRadius:4,padding:"1px 5px",whiteSpace:"nowrap",flexShrink:0}}>⟳ 연동</span>}
+                        <div key={item.id} style={{display:"grid",gridTemplateColumns:"1.8fr 55px 55px 55px 90px 80px auto",gap:5,alignItems:"center",padding:"7px 8px",borderRadius:8,background:`${cat.color}0a`,border:`1px solid ${cat.color}18`}}>
+                          {/* 항목명 */}
+                          <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
+                            <div style={{width:5,height:5,borderRadius:1,background:cat.color,flexShrink:0}} />
+                            <input value={item.label} onChange={e=>updateItem(item.id,"label",e.target.value)}
+                              style={{...inS,textAlign:"left",flex:1,minWidth:0}} />
+                            {linked && <span title="스케줄 연동" style={{fontSize:8,color:"#059669",border:"1px solid #05966944",borderRadius:3,padding:"1px 4px",whiteSpace:"nowrap",flexShrink:0}}>⟳</span>}
                           </div>
                           {isC ? (
-                            <><div style={{fontSize:11,color:"#6B7280",textAlign:"center"}}>—</div><div style={{fontSize:11,color:"#6B7280",textAlign:"center"}}>—</div><div style={{fontSize:11,color:"#6B7280",textAlign:"center"}}>5% auto</div></>
+                            <><div style={{fontSize:10,color:"#9CA3AF",textAlign:"center",gridColumn:"span 3"}}>— 자동 5% —</div></>
                           ) : (
                             <>
-                              <input type="number" value={item.qty} onChange={e=>updateItem(item.id,"qty",e.target.value)} style={{...inS,textAlign:"center"}} />
-                              <input value={item.unit} onChange={e=>updateItem(item.id,"unit",e.target.value)} style={{...inS,textAlign:"center"}} />
+                              {/* 인원 */}
+                              <input type="number" min="1" value={item.headcount??1} onChange={e=>updateItem(item.id,"headcount",e.target.value)} style={inS} />
+                              {/* 작업일수 */}
+                              <input type="number" min="1" value={item.days??item.qty??1} onChange={e=>updateItem(item.id,"days",e.target.value)} style={inS} />
+                              {/* 투입률 */}
+                              <input type="number" min="1" max="100" value={item.utilization??100} onChange={e=>updateItem(item.id,"utilization",e.target.value)} style={inS} />
+                              {/* 단가 */}
                               <input type="number" value={item.rate} onChange={e=>updateItem(item.id,"rate",e.target.value)}
-                                disabled={!userCanEditRate} title={!userCanEditRate?"단가 수정은 Admin/Senior만 가능":""}
-                                style={{...inS,textAlign:"right",opacity:userCanEditRate?1:0.45,cursor:userCanEditRate?"text":"not-allowed"}} />
+                                disabled={!userCanEditRate}
+                                style={{...inS,textAlign:"right",opacity:userCanEditRate?1:0.5,cursor:userCanEditRate?"text":"not-allowed"}} />
                             </>
                           )}
-                          <div style={{fontSize:12,fontWeight:700,color:"#1A1A2E",textAlign:"right"}}>₩{formatNum(Math.round(lineTotal))}</div>
-                          <button onClick={()=>removeItem(item.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:6,padding:"4px 8px",color:"#EF4444",cursor:"pointer",fontSize:11}}>✕</button>
+                          {/* 소계 */}
+                          <div style={{fontSize:11,fontWeight:700,color:"#1A1A2E",textAlign:"right"}}>₩{formatNum(Math.round(lineTotal))}</div>
+                          <button onClick={()=>removeItem(item.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:6,padding:"4px 7px",color:"#EF4444",cursor:"pointer",fontSize:11}}>✕</button>
                         </div>
                       );
                     })}
+                  </div>
+                  {/* 공식 안내 */}
+                  <div style={{marginTop:8,fontSize:10,color:"#9CA3AF",textAlign:"right"}}>
+                    소계 = 인원 × 작업일수 × (투입률 ÷ 100) × 단가
                   </div>
                 </>
               )}
@@ -673,7 +694,7 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
           <div style={{marginBottom:20}}>
             <div style={{display:"flex",height:8,borderRadius:99,overflow:"hidden",gap:1,marginBottom:10}}>
               {ROLE_CATEGORIES.map(cat=>{
-                const amt = quote.items.filter(i=>i.categoryId===cat.id).reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:Number(i.qty)*Number(i.rate)); },0);
+                const amt = quote.items.filter(i=>i.categoryId===cat.id).reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
                 const pct = (amt/sub)*100;
                 if (pct===0) return null;
                 return <div key={cat.id} style={{width:`${pct}%`,background:cat.color,minWidth:2}} title={`${cat.label}: ${pct.toFixed(1)}%`} />;
@@ -681,7 +702,7 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
             </div>
             <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
               {ROLE_CATEGORIES.map(cat=>{
-                const amt = quote.items.filter(i=>i.categoryId===cat.id).reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:Number(i.qty)*Number(i.rate)); },0);
+                const amt = quote.items.filter(i=>i.categoryId===cat.id).reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
                 if (amt===0) return null;
                 return (
                   <div key={cat.id} style={{display:"flex",alignItems:"center",gap:5}}>
@@ -724,8 +745,14 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
 
 /* ── 요약 탭 ──────────────────────────────────────────────────────────── */
 function SummaryTab({project, schedule, quote}) {
-  const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+Number(i.qty)*Number(i.rate),0);
-  const sub = quote.items.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:Number(i.qty)*Number(i.rate)); },0);
+  const calcLine = item => {
+    const role = getRole(item.roleId);
+    if (role?.isContingency) return 0;
+    if (item.unit!=="일") return Number(item.headcount||1)*Number(item.days||item.qty||1)*Number(item.rate||0);
+    return Number(item.headcount||1)*Number(item.days||item.qty||1)*(Number(item.utilization??100)/100)*Number(item.rate||0);
+  };
+  const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+calcLine(i),0);
+  const sub = quote.items.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
   const disc = sub*(Number(quote.discountPct)/100);
   const afterDisc = sub-disc;
   const vat = afterDisc*(quote.includeVat?0.1:0);
@@ -795,10 +822,13 @@ function SummaryTab({project, schedule, quote}) {
                   <div style={{fontSize:11,color:cat.color,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4,marginTop:8}}>{cat.label}</div>
                   {catItems.map(item=>{
                     const r   = getRole(item.roleId);
-                    const amt = r?.isContingency ? prodSub*0.05 : Number(item.qty)*Number(item.rate);
+                    const amt = r?.isContingency ? prodSub*0.05 : calcLine(item);
+                    const detail = (!r?.isContingency && item.unit==="일")
+                      ? `${item.headcount||1}명 × ${item.days||item.qty||1}일 × ${item.utilization??100}%`
+                      : (!r?.isContingency ? `${item.headcount||1}명 × ${item.days||item.qty||1}${item.unit}` : "");
                     return (
                       <div key={item.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"4px 0",borderBottom:"1px solid #F3F4F6"}}>
-                        <span style={{color:"#374151"}}>{item.label}{!r?.isContingency&&` (${item.qty}${item.unit})`}</span>
+                        <span style={{color:"#374151"}}>{item.label} <span style={{fontSize:11,color:"#9CA3AF"}}>{detail}</span></span>
                         <span style={{color:"#1A1A2E",fontWeight:600}}>₩{formatNum(Math.round(amt))}</span>
                       </div>
                     );
