@@ -23,35 +23,8 @@
 </head>
 <body>
 <div id="root"></div>
-
 <script type="text/babel">
 const { useState, useCallback, useRef, useEffect } = React;
-
-/* ── 인증 ─────────────────────────────────────────────────────────────── */
-const USERS_DB_KEY = "locus_users_db";
-const SESSION_KEY  = "locus_session";
-
-function loadUsers() {
-  try {
-    const raw = localStorage.getItem(USERS_DB_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
-  const defaults = [
-    { id:"admin", email:"admin@locus.com", password:"admin1234", role:"admin",
-      approved:true, name:"Administrator", createdAt: new Date().toISOString() }
-  ];
-  localStorage.setItem(USERS_DB_KEY, JSON.stringify(defaults));
-  return defaults;
-}
-function saveUsers(u) { localStorage.setItem(USERS_DB_KEY, JSON.stringify(u)); }
-function loadSession() { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } }
-function saveSession(u) { u ? localStorage.setItem(SESSION_KEY, JSON.stringify(u)) : localStorage.removeItem(SESSION_KEY); }
-
-const ROLE_LABELS = { admin:"Admin", senior:"Senior", member:"Member" };
-const ROLE_COLORS = { admin:"#FF6B35", senior:"#F59E0B", member:"#6B9ECC" };
-function canEditRate(role) { return role==="admin" || role==="senior"; }
-
-/* ── 데이터 ───────────────────────────────────────────────────────────── */
 const PHASE_CATEGORIES = [
   { id:"management", label:"Management", color:"#FF6B35",
     phases:[
@@ -143,8 +116,7 @@ function syncQuoteFromSchedule(schedulePhases, quoteItems) {
   });
 }
 
-/* ── PDF ──────────────────────────────────────────────────────────────── */
-function downloadPDF(project, schedule, quote, currentUser) {
+function downloadPDF(project, schedule, quote) {
   const win = window.open("","_blank");
   if (!win) { alert("팝업 차단을 해제하세요."); return; }
   const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+Number(i.qty)*Number(i.rate),0);
@@ -156,12 +128,100 @@ function downloadPDF(project, schedule, quote, currentUser) {
   const fmt = n => new Intl.NumberFormat("ko-KR").format(Math.round(n));
   const today = new Date().toLocaleDateString("ko-KR");
 
+  /* ── 간트 바 SVG 생성 ── */
+  const ganttHTML = (() => {
+    if (schedule.phases.length === 0) return "";
+    const withDates = schedule.phases.filter(p=>p.startDate&&p.endDate);
+    if (withDates.length === 0) return "";
+
+    const allStarts = withDates.map(p=>new Date(p.startDate).getTime());
+    const allEnds   = withDates.map(p=>new Date(p.endDate).getTime());
+    const gStart = Math.min(...allStarts);
+    const gEnd   = Math.max(...allEnds);
+    const totalMs = gEnd - gStart || 1;
+
+    // Month ticks
+    const months = [];
+    let cur = new Date(gStart);
+    cur.setDate(1);
+    const endD = new Date(gEnd);
+    while (cur <= endD) {
+      months.push(new Date(cur));
+      cur = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
+    }
+
+    const LABEL_W = 140;
+    const BAR_AREA = 440;
+    const ROW_H = 22;
+    const HDR_H = 20;
+
+    // Build rows grouped by category
+    const rows = [];
+    PHASE_CATEGORIES.forEach(cat=>{
+      const catPhases = schedule.phases.filter(p=>getPhase(p.phaseId)?.categoryId===cat.id);
+      if (catPhases.length===0) return;
+      rows.push({type:"cat", cat});
+      catPhases.forEach(p=>rows.push({type:"phase", p, cat}));
+    });
+
+    const totalH = HDR_H + rows.length * ROW_H + 8;
+    const W = LABEL_W + BAR_AREA;
+
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${totalH}" style="font-family:'Noto Sans KR',sans-serif;display:block;">`;
+
+    // BG
+    svg += `<rect width="${W}" height="${totalH}" fill="#f8f9fa" rx="6"/>`;
+
+    // Month header bg
+    svg += `<rect x="${LABEL_W}" y="0" width="${BAR_AREA}" height="${HDR_H}" fill="#EAEDF0"/>`;
+
+    // Month lines + labels
+    months.forEach(m=>{
+      const xPct = (m.getTime()-gStart)/totalMs;
+      const x = LABEL_W + xPct*BAR_AREA;
+      svg += `<line x1="${x}" y1="${HDR_H}" x2="${x}" y2="${totalH}" stroke="#E5E7EB" stroke-width="1"/>`;
+      const label = `${m.getFullYear().toString().slice(2)}/${String(m.getMonth()+1).padStart(2,"0")}`;
+      svg += `<text x="${x+3}" y="${HDR_H-5}" font-size="8" fill="#6B7280" font-weight="600">${label}</text>`;
+    });
+
+    // Rows
+    rows.forEach((row, ri) => {
+      const y = HDR_H + ri * ROW_H;
+      if (row.type==="cat") {
+        svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${row.cat.color}18"/>`;
+        svg += `<text x="8" y="${y+ROW_H-7}" font-size="8" fill="${row.cat.color}" font-weight="800" text-transform="uppercase">${row.cat.label.toUpperCase()}</text>`;
+      } else {
+        const {p, cat} = row;
+        const ph = getPhase(p.phaseId);
+        svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${ri%2===0?"#FFFFFF":"#F8F9FA"}"/>`;
+        svg += `<text x="${LABEL_W-4}" y="${y+ROW_H-7}" font-size="9" fill="#374151" text-anchor="end">${ph?.label||""}</text>`;
+        if (p.startDate && p.endDate) {
+          const lPct = (new Date(p.startDate).getTime()-gStart)/totalMs;
+          const wPct = (new Date(p.endDate).getTime()-new Date(p.startDate).getTime())/totalMs;
+          const bx = LABEL_W + lPct*BAR_AREA;
+          const bw = Math.max(3, wPct*BAR_AREA);
+          const dur = Math.round((new Date(p.endDate)-new Date(p.startDate))/DAY_MS);
+          svg += `<rect x="${bx}" y="${y+3}" width="${bw}" height="${ROW_H-7}" rx="3" fill="${ph?.color||"#888"}" opacity="0.85"/>`;
+          if (bw > 22) svg += `<text x="${bx+bw/2}" y="${y+ROW_H-8}" font-size="7.5" fill="rgba(0,0,0,0.7)" font-weight="700" text-anchor="middle">${dur}d</text>`;
+        }
+      }
+    });
+
+    svg += `</svg>`;
+    return `<div class="section">
+      <div class="section-title">Production Schedule — Gantt</div>
+      ${svg}
+    </div>`;
+  })();
+
+  /* ── 스케줄 테이블 ── */
   const schedRows = schedule.phases.map(p=>{
     const ph = ALL_PHASES.find(x=>x.id===p.phaseId);
-    const days = p.startDate && p.endDate ? Math.round((new Date(p.endDate)-new Date(p.startDate))/DAY_MS) : "-";
+    const days = p.startDate&&p.endDate ? Math.round((new Date(p.endDate)-new Date(p.startDate))/DAY_MS) : "-";
     return `<tr><td>${ph?.categoryLabel||""}</td><td>${ph?.label||p.phaseId}</td><td>${p.startDate||"-"}</td><td>${p.endDate||"-"}</td><td>${days!=="-"?days+"일":"-"}</td><td>${p.assignee||"-"}</td></tr>`;
   }).join("");
 
+  /* ── 견적 테이블 ── */
   const quoteRows = quote.items.map(item=>{
     const r = getRole(item.roleId);
     const amt = r?.isContingency ? prodSub*0.05 : Number(item.qty)*Number(item.rate);
@@ -191,17 +251,18 @@ tr:nth-child(even) td{background:#f9f9f9}
 .total-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #eee}
 .total-final{display:flex;justify-content:space-between;padding:10px 0;font-size:16px;font-weight:900;color:#C8102E;border-top:2px solid #C8102E;margin-top:4px}
 .footer{margin-top:40px;border-top:1px solid #eee;padding-top:16px;font-size:11px;color:#aaa;display:flex;justify-content:space-between}
-.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:#C8102E22;color:#C8102E;border:1px solid #C8102E55}
-@media print{body{padding:20px}}
+@media print{body{padding:20px}@page{size:A4;margin:15mm}}
 </style></head><body>
 <div class="header">
   <div><div style="font-size:18px;font-weight:900;color:#C8102E">LOCUS</div><div class="company">Animation Studio — Schedule &amp; Quote</div></div>
   <div class="doc-title"><h1>${project.name||"프로젝트명 미입력"}</h1>
-  <div class="meta">Client: ${project.client||"-"} &nbsp;|&nbsp; Date: ${today} &nbsp;|&nbsp; By: ${currentUser?.email||"-"} <span class="badge">${ROLE_LABELS[currentUser?.role]||""}</span></div></div>
+  <div class="meta">Client: ${project.client||"-"} &nbsp;|&nbsp; Date: ${today}</div></div>
 </div>
 <div class="section"><div class="section-title">Project Overview</div>
-<div class="info-grid">${[["Project",project.name],["Client",project.client],["PD",project.manager],["Type",project.videoType],["Duration",project.duration?project.duration+"초":"-"],["FPS",project.fps?project.fps+" fps":"-"],["Resolution",project.resolution],["Format",project.format],["Revisions",project.revisions?project.revisions+"회":"-"],["Deadline",project.deadline||"-"]].map(([k,v])=>`<div class="info-row"><span class="info-label">${k}</span><span class="info-value">${v||"-"}</span></div>`).join("")}</div></div>
-${schedule.phases.length>0?`<div class="section"><div class="section-title">Production Schedule</div><table><thead><tr><th>Category</th><th>Phase</th><th>Start</th><th>End</th><th>Days</th><th>Assignee</th></tr></thead><tbody>${schedRows}</tbody></table></div>`:""}
+<div class="info-grid">${[["Project",project.name],["Client",project.client],["PD",project.manager],["Type",project.videoType],["Duration",project.duration?project.duration+"초":"-"],["FPS",project.fps?project.fps+" fps":"-"],["Resolution",project.resolution],["Format",project.format],["Revisions",project.revisions?project.revisions+"회":"-"],["Deadline",project.deadline||"-"]].map(([k,v])=>`<div class="info-row"><span class="info-label">${k}</span><span class="info-value">${v||"-"}</span></div>`).join("")}
+</div></div>
+${ganttHTML}
+${schedule.phases.length>0?`<div class="section"><div class="section-title">Schedule Details</div><table><thead><tr><th>Category</th><th>Phase</th><th>Start</th><th>End</th><th>Days</th><th>Assignee</th></tr></thead><tbody>${schedRows}</tbody></table></div>`:""}
 ${quote.items.length>0?`<div class="section"><div class="section-title">Cost Breakdown</div><table><thead><tr><th>Category</th><th>Item</th><th>Qty</th><th>Unit Rate</th><th>Amount</th></tr></thead><tbody>${quoteRows}</tbody></table>
 <div style="margin-top:20px"><div class="totals">
 <div class="total-row"><span>Subtotal</span><span>₩${fmt(sub)}</span></div>
@@ -209,13 +270,15 @@ ${Number(quote.discountPct)>0?`<div class="total-row"><span>Discount (${quote.di
 ${quote.includeVat?`<div class="total-row"><span>VAT (10%)</span><span>₩${fmt(vat)}</span></div>`:""}
 <div class="total-final"><span>TOTAL</span><span>₩${fmt(total)}</span></div>
 </div></div></div>`:""}
-<div class="footer"><span>LOCUS Animation Studio &copy; ${new Date().getFullYear()}</span><span>Generated by ${currentUser?.email||"unknown"} on ${today}</span></div>
+<div class="footer"><span>LOCUS Animation Studio &copy; ${new Date().getFullYear()}</span><span>Generated on ${today}</span></div>
 <script>window.onload=()=>{window.print();}<\/script>
 </body></html>`);
   win.document.close();
 }
 
-/* ── 공통 UI 컴포넌트 ─────────────────────────────────────────────────── */
+/* ── 데이터 ───────────────────────────────────────────────────────────── */
+
+/* ── 공통 UI ─────────────────────────────────────────────────────────── */
 function Tag({children, color, onRemove}) {
   return (
     <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 10px",borderRadius:99,background:color+"22",border:`1px solid ${color}55`,color,fontSize:12,fontWeight:600}}>
@@ -224,26 +287,18 @@ function Tag({children, color, onRemove}) {
     </span>
   );
 }
-
 function Card({children, style={}}) {
-  return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:16,padding:"24px 28px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)",...style}}>
-      {children}
-    </div>
-  );
+  return <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:16,padding:"24px 28px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)",...style}}>{children}</div>;
 }
-
 function FInput({label, style:extStyle, ...props}) {
   return (
     <label style={{display:"flex",flexDirection:"column",gap:6}}>
       {label && <span style={{fontSize:12,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span>}
       <input {...props} style={{background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:10,padding:"10px 14px",color:"#1A1A2E",fontSize:14,outline:"none",transition:"border-color 0.2s",...extStyle}}
-        onFocus={e=>e.target.style.borderColor="#C8102E"}
-        onBlur={e=>e.target.style.borderColor="#E5E7EB"} />
+        onFocus={e=>e.target.style.borderColor="#C8102E"} onBlur={e=>e.target.style.borderColor="#E5E7EB"} />
     </label>
   );
 }
-
 function FSelect({label, children, style:extStyle, ...props}) {
   return (
     <label style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -254,193 +309,6 @@ function FSelect({label, children, style:extStyle, ...props}) {
     </label>
   );
 }
-
-/* ── 인증 화면 ────────────────────────────────────────────────────────── */
-function AuthScreen({onLogin}) {
-  const [mode, setMode]       = useState("login");
-  const [email, setEmail]     = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError]     = useState("");
-
-  const iS = {width:"100%",background:"#F8F9FA",border:"1px solid #D1D5DB",borderRadius:10,padding:"12px 16px",color:"#1A1A2E",fontSize:14,outline:"none",boxSizing:"border-box"};
-  const bS = {width:"100%",background:"#C8102E",border:"none",borderRadius:10,padding:13,color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",letterSpacing:"0.05em"};
-
-  const handleLogin = () => {
-    const users = loadUsers();
-    const user  = users.find(u=>u.email===email && u.password===password);
-    if (!user)          { setError("이메일 또는 비밀번호가 올바르지 않습니다."); return; }
-    if (!user.approved) { setError("관리자 승인 대기 중입니다."); return; }
-    saveSession(user); onLogin(user);
-  };
-
-  const handleRegister = () => {
-    if (!email.includes("@") || password.length < 6) { setError("이메일과 6자 이상 비밀번호를 입력하세요."); return; }
-    const users = loadUsers();
-    if (users.find(u=>u.email===email)) { setError("이미 등록된 이메일입니다."); return; }
-    saveUsers([...users, {id:Date.now().toString(),email,password,role:"member",approved:false,name:email.split("@")[0],createdAt:new Date().toISOString()}]);
-    setMode("pending"); setError("");
-  };
-
-  return (
-    <div style={{minHeight:"100vh",background:"#F4F5F7",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse 60% 50% at 50% 0%, rgba(200,16,46,0.06) 0%, transparent 70%)",pointerEvents:"none"}} />
-      <div style={{position:"relative",width:380,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:20,padding:"40px 36px",boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
-        <div style={{marginBottom:32}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:"#C8102E",boxShadow:"0 0 10px #C8102E"}} />
-            <span style={{fontSize:11,color:"#C8102E",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.15em"}}>Animation Studio</span>
-          </div>
-          <div style={{fontSize:22,fontWeight:900,color:"#1A1A2E",letterSpacing:"-0.02em"}}>Schedule & <span style={{color:"#C8102E"}}>Quote Tool</span></div>
-        </div>
-
-        {mode==="pending" ? (
-          <div style={{textAlign:"center"}}>
-            <div style={{fontSize:40,marginBottom:16}}>⏳</div>
-            <h2 style={{color:"#1A1A2E",fontSize:18,fontWeight:800,marginBottom:8}}>가입 신청 완료</h2>
-            <p style={{color:"#6B7280",fontSize:13,lineHeight:1.6}}>관리자 승인 후 로그인 가능합니다.</p>
-            <button onClick={()=>setMode("login")} style={{...bS,marginTop:24,background:"#EFEFEF",color:"#374151"}}>로그인으로 돌아가기</button>
-          </div>
-        ) : (
-          <>
-            <h2 style={{color:"#1A1A2E",fontSize:20,fontWeight:900,marginBottom:24}}>{mode==="login"?"로그인":"회원가입"}</h2>
-            <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
-              <input type="email" placeholder="이메일" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} style={iS} />
-              <input type="password" placeholder="비밀번호 (6자 이상)" value={password}
-                onChange={e=>{setPassword(e.target.value);setError("");}}
-                onKeyDown={e=>e.key==="Enter"&&(mode==="login"?handleLogin():handleRegister())} style={iS} />
-            </div>
-            {error && <div style={{color:"#EF4444",fontSize:12,marginBottom:12,padding:"8px 12px",background:"rgba(239,68,68,0.1)",borderRadius:8}}>{error}</div>}
-            <button onClick={mode==="login"?handleLogin:handleRegister} style={bS}>{mode==="login"?"로그인":"가입 신청"}</button>
-            <div style={{textAlign:"center",marginTop:16}}>
-              <button onClick={()=>{setMode(mode==="login"?"register":"login");setError("");}}
-                style={{background:"none",border:"none",color:"#6B7280",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>
-                {mode==="login"?"계정이 없으신가요? 회원가입":"이미 계정이 있으신가요? 로그인"}
-              </button>
-            </div>
-            {mode==="login" && <div style={{marginTop:16,padding:"10px 12px",background:"#F4F5F7",borderRadius:8,fontSize:11,color:"#6B7280"}}>
-              계정이 없으면 관리자에게 문의하거나 회원가입을 신청하세요.
-            </div>}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ── 어드민 패널 ──────────────────────────────────────────────────────── */
-function AdminPanel({currentUser, onClose}) {
-  const [users, setUsers]   = useState(loadUsers());
-  const [tab, setTab]       = useState("pending");
-  const [pwEmail, setPwEmail] = useState("");
-  const [pwOld, setPwOld]   = useState("");
-  const [pwNew, setPwNew]   = useState("");
-  const [pwNew2, setPwNew2] = useState("");
-  const [pwMsg, setPwMsg]   = useState({text:"",ok:false});
-
-  const refresh = () => setUsers(loadUsers());
-
-  const approve = id => { saveUsers(users.map(u=>u.id===id?{...u,approved:true}:u)); refresh(); };
-  const reject  = id => { if (!window.confirm("이 사용자를 삭제하시겠습니까?")) return; saveUsers(users.filter(u=>u.id!==id)); refresh(); };
-  const changeRole = (id,role) => { saveUsers(users.map(u=>u.id===id?{...u,role}:u)); refresh(); };
-
-  const handlePwChange = () => {
-    const all = loadUsers();
-    const tgt = all.find(u=>u.email===pwEmail);
-    if (!tgt)                     { setPwMsg({text:"존재하지 않는 이메일입니다.",ok:false}); return; }
-    if (tgt.password!==pwOld)     { setPwMsg({text:"현재 비밀번호가 올바르지 않습니다.",ok:false}); return; }
-    if (pwNew.length<6)           { setPwMsg({text:"새 비밀번호는 6자 이상이어야 합니다.",ok:false}); return; }
-    if (pwNew!==pwNew2)           { setPwMsg({text:"새 비밀번호가 일치하지 않습니다.",ok:false}); return; }
-    saveUsers(all.map(u=>u.email===pwEmail?{...u,password:pwNew}:u));
-    setPwMsg({text:"비밀번호가 성공적으로 변경되었습니다.",ok:true});
-    setPwOld(""); setPwNew(""); setPwNew2("");
-    refresh();
-  };
-
-  const pending  = users.filter(u=>!u.approved);
-  const approved = users.filter(u=>u.approved);
-  const rowS = {display:"grid",gridTemplateColumns:"1fr 100px 120px auto",gap:10,alignItems:"center",padding:"10px 14px",borderRadius:10,background:"#F4F5F7",marginBottom:8};
-  const iS   = {width:"100%",background:"#F8F9FA",border:"1px solid #D1D5DB",borderRadius:8,padding:"9px 12px",color:"#1A1A2E",fontSize:13,outline:"none",boxSizing:"border-box"};
-  const selS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:6,padding:"5px 8px",color:"#1A1A2E",fontSize:12};
-
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
-      <div style={{width:640,maxHeight:"80vh",background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:20,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 8px 40px rgba(0,0,0,0.15)"}}>
-        <div style={{padding:"20px 24px",borderBottom:"1px solid #E5E7EB",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <h2 style={{margin:0,fontSize:16,fontWeight:800,color:"#1A1A2E"}}>👑 Admin Panel</h2>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#6B7280",fontSize:20,cursor:"pointer"}}>×</button>
-        </div>
-        <div style={{display:"flex",gap:4,padding:"12px 24px 0",borderBottom:"1px solid #E5E7EB"}}>
-          {[["pending",`승인 대기 (${pending.length})`],["all",`전체 멤버 (${approved.length})`],["pw","비밀번호 변경"]].map(([id,label])=>(
-            <button key={id} onClick={()=>setTab(id)} style={{padding:"8px 16px",borderRadius:"8px 8px 0 0",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:tab===id?"#C8102E":"transparent",color:tab===id?"#fff":"#6B7280"}}>{label}</button>
-          ))}
-        </div>
-        <div style={{flex:1,overflow:"auto",padding:24}}>
-          {tab==="pending" && (
-            pending.length===0 ? <p style={{color:"#6B7280",fontSize:13}}>승인 대기 중인 사용자가 없습니다.</p> :
-            pending.map(u=>(
-              <div key={u.id} style={rowS}>
-                <div>
-                  <div style={{fontWeight:700,fontSize:13,color:"#1A1A2E"}}>{u.email}</div>
-                  <div style={{fontSize:11,color:"#6B7280"}}>{new Date(u.createdAt).toLocaleString("ko-KR")}</div>
-                </div>
-                <select style={selS}><option value="member">Member</option><option value="senior">Senior</option></select>
-                <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>approve(u.id)} style={{background:"rgba(52,211,153,0.2)",border:"1px solid rgba(52,211,153,0.4)",borderRadius:6,padding:"5px 12px",color:"#059669",fontSize:12,cursor:"pointer",fontWeight:700}}>승인</button>
-                  <button onClick={()=>reject(u.id)} style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:6,padding:"5px 10px",color:"#EF4444",fontSize:12,cursor:"pointer"}}>거절</button>
-                </div>
-              </div>
-            ))
-          )}
-          {tab==="all" && approved.map(u=>(
-            <div key={u.id} style={rowS}>
-              <div>
-                <div style={{fontWeight:700,fontSize:13,color:"#1A1A2E"}}>{u.email}</div>
-                <div style={{fontSize:11,color:"#6B7280"}}>가입: {new Date(u.createdAt).toLocaleString("ko-KR")}</div>
-              </div>
-              <span style={{fontSize:11,fontWeight:700,color:ROLE_COLORS[u.role],background:ROLE_COLORS[u.role]+"22",border:`1px solid ${ROLE_COLORS[u.role]}55`,padding:"3px 10px",borderRadius:99,textAlign:"center"}}>{ROLE_LABELS[u.role]}</span>
-              {u.id!=="admin"
-                ? <select value={u.role} onChange={e=>changeRole(u.id,e.target.value)} style={selS}><option value="member">Member</option><option value="senior">Senior</option><option value="admin">Admin</option></select>
-                : <div style={{color:"#6B7280",fontSize:11}}>Super Admin</div>}
-              {u.id!=="admin" && <button onClick={()=>reject(u.id)} style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:6,padding:"5px 8px",color:"#EF4444",fontSize:11,cursor:"pointer"}}>삭제</button>}
-            </div>
-          ))}
-          {tab==="pw" && (
-            <div style={{maxWidth:380,display:"flex",flexDirection:"column",gap:12}}>
-              <p style={{color:"#6B7280",fontSize:12,marginBottom:4}}>계정의 비밀번호를 변경합니다. 현재 비밀번호 확인 후 변경됩니다.</p>
-              <label style={{display:"flex",flexDirection:"column",gap:5}}>
-                <span style={{fontSize:11,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em"}}>이메일</span>
-                <select value={pwEmail} onChange={e=>{setPwEmail(e.target.value);setPwMsg({text:"",ok:false});}} style={iS}>
-                  <option value="">-- 계정 선택 --</option>
-                  {approved.map(u=><option key={u.id} value={u.email}>{u.email} ({ROLE_LABELS[u.role]})</option>)}
-                </select>
-              </label>
-              {["현재 비밀번호","새 비밀번호","새 비밀번호 확인"].map((lbl,idx)=>{
-                const vals = [pwOld, pwNew, pwNew2];
-                const setters = [setPwOld, setPwNew, setPwNew2];
-                return (
-                  <label key={lbl} style={{display:"flex",flexDirection:"column",gap:5}}>
-                    <span style={{fontSize:11,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em"}}>{lbl}</span>
-                    <input type="password" value={vals[idx]} onChange={e=>setters[idx](e.target.value)}
-                      placeholder={idx===1?"6자 이상":lbl} style={iS}
-                      onKeyDown={e=>e.key==="Enter"&&idx===2&&handlePwChange()} />
-                  </label>
-                );
-              })}
-              {pwMsg.text && (
-                <div style={{padding:"8px 12px",borderRadius:8,fontSize:12,background:pwMsg.ok?"rgba(52,211,153,0.1)":"rgba(239,68,68,0.1)",color:pwMsg.ok?"#059669":"#EF4444",border:`1px solid ${pwMsg.ok?"rgba(52,211,153,0.3)":"rgba(239,68,68,0.3)"}`}}>
-                  {pwMsg.ok?"✓ ":"✗ "}{pwMsg.text}
-                </div>
-              )}
-              <button onClick={handlePwChange} style={{background:"#C8102E",border:"none",borderRadius:8,padding:11,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",marginTop:4}}>비밀번호 변경</button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── 프로젝트 정보 탭 ─────────────────────────────────────────────────── */
 function ProjectInfoTab({project, onChange}) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
@@ -949,21 +817,20 @@ function SummaryTab({project, schedule, quote}) {
   );
 }
 
-/* ── 메인 앱 ──────────────────────────────────────────────────────────── */
+
+/* ── 메인 앱 (로그인 없음) ───────────────────────────────────────────── */
 const DEFAULT_PROJECT = {name:"",client:"",manager:"",startDate:"",deadline:"",videoType:"",description:"",duration:"",resolution:"1920x1080",format:"mp4_h264",revisions:"3",music:"",subtitle:"",fps:"24"};
 const DEFAULT_SCHEDULE = {phases:[],note:""};
-const DEFAULT_QUOTE    = {items:[],discountPct:0,includeVat:true,musicCost:0,stockCost:0,miscCost:0,miscNote:""};
+const DEFAULT_QUOTE    = {items:[],discountPct:0,includeVat:true};
 const TABS = [
-  {id:"info",  label:"프로젝트 정보", icon:"📁"},
-  {id:"schedule",label:"스케줄",     icon:"📅"},
-  {id:"quote", label:"견적",         icon:"💰"},
-  {id:"summary",label:"요약",        icon:"📊"}
+  {id:"info",    label:"프로젝트 정보", icon:"📁"},
+  {id:"schedule",label:"스케줄",       icon:"📅"},
+  {id:"quote",   label:"견적",         icon:"💰"},
+  {id:"summary", label:"요약",         icon:"📊"}
 ];
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(()=>loadSession());
-  const [showAdmin,   setShowAdmin]   = useState(false);
-  const [activeTab,   setActiveTab]   = useState("info");
+  const [activeTab,  setActiveTab]  = useState("info");
   const [project,  setProject]  = useState(DEFAULT_PROJECT);
   const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
   const [quote,    setQuote]    = useState(DEFAULT_QUOTE);
@@ -980,28 +847,28 @@ function App() {
   },[]);
   const updateQuote = useCallback((f,v)=>setQuote(p=>({...p,[f]:v})),[]);
 
-  const handleLogin  = user => setCurrentUser(user);
-  const handleLogout = ()   => { saveSession(null); setCurrentUser(null); };
-
   const saveProject = () => {
-    const entry = {id:Date.now(),project,schedule,quote,savedAt:new Date().toLocaleString("ko-KR"),savedBy:currentUser?.email};
+    const entry = {id:Date.now(),project,schedule,quote,savedAt:new Date().toLocaleString("ko-KR")};
     setProjects(prev=>[entry,...prev]);
     alert(`"${project.name||"무제 프로젝트"}" 저장 완료!`);
   };
-  const loadProjectEntry = entry => { setProject(entry.project); setSchedule(entry.schedule); setQuote(entry.quote); setShowSaved(false); setActiveTab("info"); };
-  const newProject = () => { if (window.confirm("새 프로젝트를 시작하면 현재 내용이 초기화됩니다.")) { setProject(DEFAULT_PROJECT); setSchedule(DEFAULT_SCHEDULE); setQuote(DEFAULT_QUOTE); setActiveTab("info"); } };
+  const loadProjectEntry = entry => {
+    setProject(entry.project); setSchedule(entry.schedule); setQuote(entry.quote);
+    setShowSaved(false); setActiveTab("info");
+  };
+  const newProject = () => {
+    if (window.confirm("새 프로젝트를 시작하면 현재 내용이 초기화됩니다.")) {
+      setProject(DEFAULT_PROJECT); setSchedule(DEFAULT_SCHEDULE); setQuote(DEFAULT_QUOTE); setActiveTab("info");
+    }
+  };
 
-  if (!currentUser) return <AuthScreen onLogin={handleLogin} />;
-
-  const userCanEditRate = canEditRate(currentUser.role);
   const btnBase = {borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",border:"none"};
 
   return (
     <div style={{minHeight:"100vh",background:"#F4F5F7",color:"#1A1A2E"}}>
-      {showAdmin && <AdminPanel currentUser={currentUser} onClose={()=>setShowAdmin(false)} />}
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(ellipse 70% 40% at 50% -10%, rgba(200,16,46,0.06) 0%, transparent 70%)"}} />
-
       <div style={{position:"relative",zIndex:1,maxWidth:960,margin:"0 auto",padding:"28px 24px"}}>
+
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
           <div>
@@ -1014,20 +881,22 @@ function App() {
             </h1>
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end",alignItems:"center"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",background:"#EFF0F3",borderRadius:8,border:"1px solid #E5E7EB"}}>
-              <span style={{fontSize:11,color:ROLE_COLORS[currentUser.role],fontWeight:700,background:ROLE_COLORS[currentUser.role]+"22",border:`1px solid ${ROLE_COLORS[currentUser.role]}55`,padding:"2px 7px",borderRadius:99}}>{ROLE_LABELS[currentUser.role]}</span>
-              <span style={{fontSize:12,color:"#6B7280"}}>{currentUser.email}</span>
-            </div>
-            {currentUser.role==="admin" && <button onClick={()=>setShowAdmin(true)} style={{...btnBase,background:"rgba(200,16,46,0.1)",color:"#C8102E",border:"1px solid rgba(200,16,46,0.3)"}}>👑 Admin</button>}
-            <button onClick={()=>setShowSaved(s=>!s)} style={{...btnBase,background:"#F8F9FA",color:"#6B7280",border:"1px solid #E5E7EB",fontWeight:400}}>📂 ({projects.length})</button>
-            <button onClick={()=>downloadPDF(project,schedule,quote,currentUser)} style={{...btnBase,background:"rgba(107,158,204,0.15)",color:"#6B9ECC",border:"1px solid rgba(107,158,204,0.35)"}}>📄 PDF</button>
-            <button onClick={saveProject} style={{...btnBase,background:"rgba(52,211,153,0.15)",color:"#059669",border:"1px solid rgba(52,211,153,0.3)"}}>💾 저장</button>
-            <button onClick={newProject} style={{...btnBase,background:"#C8102E",color:"#fff"}}>+ 새 프로젝트</button>
-            <button onClick={handleLogout} style={{...btnBase,background:"none",color:"#6B7280",border:"1px solid #E5E7EB",fontWeight:400,fontSize:11}}>로그아웃</button>
+            <button onClick={()=>setShowSaved(s=>!s)} style={{...btnBase,background:"#F8F9FA",color:"#6B7280",border:"1px solid #E5E7EB",fontWeight:400}}>
+              📂 저장 목록 ({projects.length})
+            </button>
+            <button onClick={()=>downloadPDF(project,schedule,quote)} style={{...btnBase,background:"rgba(107,158,204,0.15)",color:"#3B82C4",border:"1px solid rgba(107,158,204,0.35)"}}>
+              📄 PDF 출력
+            </button>
+            <button onClick={saveProject} style={{...btnBase,background:"rgba(52,211,153,0.15)",color:"#059669",border:"1px solid rgba(52,211,153,0.3)"}}>
+              💾 저장
+            </button>
+            <button onClick={newProject} style={{...btnBase,background:"#C8102E",color:"#fff"}}>
+              + 새 프로젝트
+            </button>
           </div>
         </div>
 
-        {/* 저장된 프로젝트 */}
+        {/* 저장 목록 패널 */}
         {showSaved && (
           <Card style={{marginBottom:20}}>
             <h3 style={{margin:"0 0 14px",color:"#C8102E",fontSize:14,fontWeight:700}}>저장된 프로젝트</h3>
@@ -1038,7 +907,7 @@ function App() {
                     <div key={entry.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderRadius:10,background:"#F8F9FA",border:"1px solid #E5E7EB"}}>
                       <div>
                         <div style={{fontWeight:700,fontSize:14}}>{entry.project.name||"무제 프로젝트"}</div>
-                        <div style={{fontSize:11,color:"#6B7280"}}>{entry.project.client&&`${entry.project.client} · `}{entry.savedAt} · by {entry.savedBy}</div>
+                        <div style={{fontSize:11,color:"#6B7280"}}>{entry.project.client&&`${entry.project.client} · `}{entry.savedAt}</div>
                       </div>
                       <button onClick={()=>loadProjectEntry(entry)} style={{...btnBase,background:"#C8102E",color:"#fff",padding:"6px 14px"}}>불러오기</button>
                     </div>
@@ -1047,7 +916,7 @@ function App() {
           </Card>
         )}
 
-        {/* 프로젝트 배지 */}
+        {/* 현재 프로젝트 배지 */}
         {project.name && (
           <div style={{marginBottom:16,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{fontSize:12,color:"#6B7280"}}>현재:</span>
@@ -1055,7 +924,6 @@ function App() {
             {project.client && <Tag color="#9CA3AF">{project.client}</Tag>}
             {project.videoType && <Tag color="#6B9ECC">{project.videoType}</Tag>}
             {project.deadline && <Tag color="#34D399">납품 {project.deadline}</Tag>}
-            {!userCanEditRate && <Tag color="#F59E0B">⚠ 단가 수정 불가 (Member)</Tag>}
           </div>
         )}
 
@@ -1068,9 +936,10 @@ function App() {
           ))}
         </div>
 
+        {/* 탭 콘텐츠 */}
         {activeTab==="info"     && <ProjectInfoTab project={project} onChange={updateProject} />}
         {activeTab==="schedule" && <ScheduleTab schedule={schedule} onChange={updateSchedule} projectStart={project.startDate} projectDeadline={project.deadline} />}
-        {activeTab==="quote"    && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={userCanEditRate} />}
+        {activeTab==="quote"    && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={true} />}
         {activeTab==="summary"  && <SummaryTab project={project} schedule={schedule} quote={quote} />}
 
         {/* 하단 네비게이션 */}
@@ -1082,6 +951,7 @@ function App() {
             disabled={activeTab===TABS[TABS.length-1].id}
             style={{...btnBase,background:"#C8102E",color:"#fff",opacity:activeTab===TABS[TABS.length-1].id?0.35:1}}>다음 →</button>
         </div>
+
       </div>
     </div>
   );
