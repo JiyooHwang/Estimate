@@ -104,7 +104,8 @@ function addDays(dateStr, days) {
 function daysBetween(a,b) { return Math.round((new Date(b)-new Date(a))/DAY_MS); }
 
 function syncQuoteFromSchedule(schedulePhases, quoteItems) {
-  return quoteItems.map(item => {
+  // Update days for existing linked items
+  const updated = quoteItems.map(item => {
     const role = getRole(item.roleId);
     if (!role || role.isContingency || item.unit !== "일") return item;
     const linkedPhaseId = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===item.roleId)?.[0];
@@ -114,6 +115,23 @@ function syncQuoteFromSchedule(schedulePhases, quoteItems) {
     const days = daysBetween(phase.startDate, phase.endDate);
     return days > 0 ? {...item, days} : item;
   });
+  // Auto-add quote items for newly added phases
+  const newItems = [];
+  schedulePhases.forEach(phase => {
+    const roleId = PHASE_ROLE_MAP[phase.phaseId];
+    if (!roleId) return;
+    if (updated.find(i=>i.roleId===roleId)) return;
+    const role = getRole(roleId);
+    if (!role) return;
+    const days = phase.startDate && phase.endDate ? Math.max(1, daysBetween(phase.startDate, phase.endDate)) : 1;
+    newItems.push({
+      id: Date.now() + newItems.length,
+      roleId: role.id, label: role.label,
+      headcount: 1, days, utilization: 100,
+      rate: role.defaultRate, unit: role.unit, categoryId: role.categoryId
+    });
+  });
+  return [...updated, ...newItems];
 }
 
 function downloadPDF(project, schedule, quote) {
@@ -468,9 +486,7 @@ function GanttChart({phases, ganttStart, ganttEnd, onUpdate}) {
 }
 
 /* ── 스케줄 탭 ────────────────────────────────────────────────────────── */
-function ScheduleTab({schedule, onChange, projectStart, projectDeadline, ganttStart, setGanttStart, ganttEnd, setGanttEnd}) {
-  useEffect(() => { if (projectStart && !ganttStart)   setGanttStart(projectStart);   }, [projectStart]);
-  useEffect(() => { if (projectDeadline && !ganttEnd)  setGanttEnd(projectDeadline);  }, [projectDeadline]);
+function ScheduleTab({schedule, onChange, projectStart, ganttStart, setGanttStart, ganttEnd, setGanttEnd}) {
 
   const updatePhase     = (id,f,v) => onChange("phases", schedule.phases.map(p=>p.id===id?{...p,[f]:v}:p));
   const updatePhaseDates = (id,s,e) => onChange("phases", schedule.phases.map(p=>p.id===id?{...p,startDate:s,endDate:e}:p));
@@ -788,19 +804,33 @@ function SummaryTab({project, schedule, quote}) {
       {schedule.phases.length>0 && (
         <Card>
           <h3 style={{margin:"0 0 16px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>📅 일정 요약</h3>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {schedule.phases.map(p=>{
-              const phase = getPhase(p.phaseId);
-              const days  = p.startDate&&p.endDate ? daysBetween(p.startDate,p.endDate) : null;
-              return (
-                <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,padding:"8px 12px",borderRadius:8,background:"#F4F5F7"}}>
-                  <Tag color={phase?.color||"#888"}>{phase?.label}</Tag>
-                  <span style={{fontSize:13,color:"#6B7280"}}>{p.startDate||"?"} ~ {p.endDate||"?"}</span>
-                  {days!==null && <span style={{fontSize:12,color:"#9CA3AF"}}>({days}일)</span>}
-                  {p.assignee && <span style={{fontSize:12,color:"#6B9ECC"}}>👤 {p.assignee}</span>}
-                </div>
-              );
-            })}
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{background:"#F4F5F7"}}>
+                  {["단계","시작일","종료일","기간","담당자"].map((h,i)=>(
+                    <th key={i} style={{padding:"8px 12px",textAlign:i===0?"left":"center",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"2px solid #E5E7EB",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {schedule.phases.map((p,ri)=>{
+                  const phase = getPhase(p.phaseId);
+                  const days  = p.startDate&&p.endDate ? daysBetween(p.startDate,p.endDate) : null;
+                  return (
+                    <tr key={p.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6"}}>
+                        <Tag color={phase?.color||"#888"}>{phase?.label}</Tag>
+                      </td>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center",color:"#374151"}}>{p.startDate||"-"}</td>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center",color:"#374151"}}>{p.endDate||"-"}</td>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center",color:"#6B7280",fontWeight:600}}>{days!==null?`${days}일`:"-"}</td>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center",color:"#6B9ECC"}}>{p.assignee||"-"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </Card>
       )}
@@ -863,6 +893,8 @@ function App() {
   const [showSaved,setShowSaved]= useState(false);
   const [ganttStart, setGanttStart] = useState(() => new Date().toISOString().slice(0,10));
   const [ganttEnd,   setGanttEnd]   = useState(() => addDays(new Date().toISOString().slice(0,10), 60));
+
+  useEffect(() => { if (project.deadline) setGanttEnd(project.deadline); }, [project.deadline]);
 
   const updateProject  = useCallback((f,v)=>setProject(p=>({...p,[f]:v})),[]);
   const updateSchedule = useCallback((f,v)=>{
@@ -965,7 +997,7 @@ function App() {
 
         {/* 탭 콘텐츠 */}
         {activeTab==="info"     && <ProjectInfoTab project={project} onChange={updateProject} />}
-        {activeTab==="schedule" && <ScheduleTab schedule={schedule} onChange={updateSchedule} projectStart={project.startDate} projectDeadline={project.deadline} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} />}
+        {activeTab==="schedule" && <ScheduleTab schedule={schedule} onChange={updateSchedule} projectStart={project.startDate} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} />}
         {activeTab==="quote"    && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={true} />}
         {activeTab==="summary"  && <SummaryTab project={project} schedule={schedule} quote={quote} />}
 
@@ -974,9 +1006,10 @@ function App() {
           <button onClick={()=>{const i=TABS.findIndex(t=>t.id===activeTab);if(i>0)setActiveTab(TABS[i-1].id);}}
             disabled={activeTab===TABS[0].id}
             style={{...btnBase,background:"#F8F9FA",color:"#6B7280",border:"1px solid #E5E7EB",fontWeight:400,opacity:activeTab===TABS[0].id?0.35:1}}>← 이전</button>
-          <button onClick={()=>{const i=TABS.findIndex(t=>t.id===activeTab);if(i<TABS.length-1)setActiveTab(TABS[i+1].id);}}
-            disabled={activeTab===TABS[TABS.length-1].id}
-            style={{...btnBase,background:"#C8102E",color:"#fff",opacity:activeTab===TABS[TABS.length-1].id?0.35:1}}>다음 →</button>
+          {activeTab!==TABS[TABS.length-1].id && (
+            <button onClick={()=>{const i=TABS.findIndex(t=>t.id===activeTab);if(i<TABS.length-1)setActiveTab(TABS[i+1].id);}}
+              style={{...btnBase,background:"#C8102E",color:"#fff"}}>다음 →</button>
+          )}
         </div>
 
       </div>
