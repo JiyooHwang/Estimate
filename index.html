@@ -407,14 +407,19 @@ function GanttChart({phases, ganttStart, ganttEnd, onUpdate}) {
       const {phaseId,type,startX,origStart,origEnd,containerWidth} = dragRef.current;
       const daysDelta = Math.round(((ev.clientX-startX)/containerWidth)*totalDays);
       if (type==="move") {
-        const ns = addDays(origStart,daysDelta);
-        onUpdate(phaseId, ns, addDays(ns, daysBetween(origStart,origEnd)));
+        const dur = daysBetween(origStart,origEnd);
+        let ns = addDays(origStart,daysDelta);
+        if (addDays(ns,dur) > ganttEnd) ns = addDays(ganttEnd,-dur);
+        if (ns < ganttStart) ns = ganttStart;
+        onUpdate(phaseId, ns, addDays(ns,dur));
       } else if (type==="resize-right") {
-        const ne = addDays(origEnd,daysDelta);
-        if (ne>origStart) onUpdate(phaseId,origStart,ne);
+        let ne = addDays(origEnd,daysDelta);
+        if (ne > ganttEnd) ne = ganttEnd;
+        if (ne > origStart) onUpdate(phaseId,origStart,ne);
       } else if (type==="resize-left") {
-        const ns = addDays(origStart,daysDelta);
-        if (ns<origEnd) onUpdate(phaseId,ns,origEnd);
+        let ns = addDays(origStart,daysDelta);
+        if (ns < ganttStart) ns = ganttStart;
+        if (ns < origEnd) onUpdate(phaseId,ns,origEnd);
       }
     };
     const onUp = () => { dragRef.current=null; window.removeEventListener("mousemove",onMove); window.removeEventListener("mouseup",onUp); };
@@ -439,12 +444,16 @@ function GanttChart({phases, ganttStart, ganttEnd, onUpdate}) {
         {/* Month header */}
         <div style={{display:"flex",borderBottom:"1px solid #E5E7EB"}}>
           <div style={{width:LABEL_W,flexShrink:0,padding:"6px 12px"}} />
-          <div style={{flex:1,position:"relative",height:28}}>
+          <div style={{flex:1,position:"relative",height:42}}>
             {months.map((m,i)=>{
               const left = Math.max(0,(daysBetween(ganttStart,m.toISOString().slice(0,10))/totalDays)*100);
+              const pctPerMonth = 100/totalDays*30;
+              if (pctPerMonth < 2 && m.getMonth()%3!==0) return null;
+              if (pctPerMonth < 1 && m.getMonth()%6!==0) return null;
               return (
-                <div key={i} style={{position:"absolute",left:`${left}%`,fontSize:10,color:"#6B7280",fontWeight:600,top:8,paddingLeft:4,borderLeft:"1px solid #D1D5DB",whiteSpace:"nowrap"}}>
-                  {`${m.getFullYear().toString().slice(2)}/${String(m.getMonth()+1).padStart(2,"0")}`}
+                <div key={i} style={{position:"absolute",left:`${left}%`,top:4,paddingLeft:4,borderLeft:"1px solid #D1D5DB"}}>
+                  <div style={{fontSize:9,color:"#374151",fontWeight:700,lineHeight:1.4,whiteSpace:"nowrap"}}>{m.getFullYear()}</div>
+                  <div style={{fontSize:9,color:"#6B7280",fontWeight:600,lineHeight:1.4,whiteSpace:"nowrap"}}>{String(m.getMonth()+1).padStart(2,"0")}월</div>
                 </div>
               );
             })}
@@ -510,7 +519,7 @@ function ScheduleTab({schedule, onChange, projectStart, ganttStart, setGanttStar
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
       {/* 2컬럼: 좌측 간트, 우측 카테고리 카드 */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 520px",gap:20,alignItems:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 600px",gap:20,alignItems:"start"}}>
 
         {/* 좌측: 간트 차트 */}
         <Card style={{minWidth:0}}>
@@ -556,7 +565,7 @@ function ScheduleTab({schedule, onChange, projectStart, ganttStart, setGanttStar
                   : (
                     <>
                       {/* 헤더 행 */}
-                      <div style={{display:"grid",gridTemplateColumns:"120px 1fr 1fr 90px 26px",gap:4,padding:"0 2px",marginBottom:4}}>
+                      <div style={{display:"grid",gridTemplateColumns:"130px 1fr 1fr 100px 26px",gap:4,padding:"0 2px",marginBottom:4}}>
                         {["단계","시작일","종료일","담당자",""].map((h,i)=>(
                           <span key={i} style={{fontSize:9,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</span>
                         ))}
@@ -566,7 +575,7 @@ function ScheduleTab({schedule, onChange, projectStart, ganttStart, setGanttStar
                           const ph  = getPhase(p.phaseId);
                           const dur = p.startDate&&p.endDate ? daysBetween(p.startDate,p.endDate) : null;
                           return (
-                            <div key={p.id} style={{display:"grid",gridTemplateColumns:"120px 1fr 1fr 90px 26px",gap:4,alignItems:"center",padding:"6px 8px",borderRadius:8,background:`${ph?.color||"#888"}0d`,border:`1px solid ${ph?.color||"#888"}22`}}>
+                            <div key={p.id} style={{display:"grid",gridTemplateColumns:"130px 1fr 1fr 100px 26px",gap:4,alignItems:"center",padding:"6px 8px",borderRadius:8,background:`${ph?.color||"#888"}0d`,border:`1px solid ${ph?.color||"#888"}22`}}>
                               <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}>
                                 <div style={{width:7,height:7,borderRadius:2,background:ph?.color,flexShrink:0}} />
                                 <span style={{fontSize:11,color:"#1A1A2E",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph?.label}</span>
@@ -959,7 +968,7 @@ function App() {
   return (
     <div style={{minHeight:"100vh",background:"#F4F5F7",color:"#1A1A2E"}}>
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(ellipse 70% 40% at 50% -10%, rgba(200,16,46,0.06) 0%, transparent 70%)"}} />
-      <div style={{position:"relative",zIndex:1,maxWidth:1400,margin:"0 auto",padding:"28px 24px"}}>
+      <div style={{position:"relative",zIndex:1,maxWidth:1800,margin:"0 auto",padding:"28px 32px"}}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
