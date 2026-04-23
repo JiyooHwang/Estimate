@@ -510,7 +510,7 @@ function ScheduleTab({schedule, onChange, projectStart, ganttStart, setGanttStar
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
       {/* 2컬럼: 좌측 간트, 우측 카테고리 카드 */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 400px",gap:20,alignItems:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 520px",gap:20,alignItems:"start"}}>
 
         {/* 좌측: 간트 차트 */}
         <Card style={{minWidth:0}}>
@@ -556,7 +556,7 @@ function ScheduleTab({schedule, onChange, projectStart, ganttStart, setGanttStar
                   : (
                     <>
                       {/* 헤더 행 */}
-                      <div style={{display:"grid",gridTemplateColumns:"90px 1fr 1fr 80px 22px",gap:4,padding:"0 2px",marginBottom:4}}>
+                      <div style={{display:"grid",gridTemplateColumns:"120px 1fr 1fr 90px 26px",gap:4,padding:"0 2px",marginBottom:4}}>
                         {["단계","시작일","종료일","담당자",""].map((h,i)=>(
                           <span key={i} style={{fontSize:9,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</span>
                         ))}
@@ -566,7 +566,7 @@ function ScheduleTab({schedule, onChange, projectStart, ganttStart, setGanttStar
                           const ph  = getPhase(p.phaseId);
                           const dur = p.startDate&&p.endDate ? daysBetween(p.startDate,p.endDate) : null;
                           return (
-                            <div key={p.id} style={{display:"grid",gridTemplateColumns:"90px 1fr 1fr 80px 22px",gap:4,alignItems:"center",padding:"6px 8px",borderRadius:8,background:`${ph?.color||"#888"}0d`,border:`1px solid ${ph?.color||"#888"}22`}}>
+                            <div key={p.id} style={{display:"grid",gridTemplateColumns:"120px 1fr 1fr 90px 26px",gap:4,alignItems:"center",padding:"6px 8px",borderRadius:8,background:`${ph?.color||"#888"}0d`,border:`1px solid ${ph?.color||"#888"}22`}}>
                               <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}>
                                 <div style={{width:7,height:7,borderRadius:2,background:ph?.color,flexShrink:0}} />
                                 <span style={{fontSize:11,color:"#1A1A2E",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph?.label}</span>
@@ -959,7 +959,7 @@ function App() {
   return (
     <div style={{minHeight:"100vh",background:"#F4F5F7",color:"#1A1A2E"}}>
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(ellipse 70% 40% at 50% -10%, rgba(200,16,46,0.06) 0%, transparent 70%)"}} />
-      <div style={{position:"relative",zIndex:1,maxWidth:960,margin:"0 auto",padding:"28px 24px"}}>
+      <div style={{position:"relative",zIndex:1,maxWidth:1400,margin:"0 auto",padding:"28px 24px"}}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
