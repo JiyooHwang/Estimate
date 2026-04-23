@@ -44,7 +44,12 @@ const PHASE_CATEGORIES = [
       {id:"lighting_render",label:"Lighting & Render",color:"#F59E0B"},
       {id:"simulation",label:"Simulation",color:"#FCD34D"},
       {id:"fx",label:"FX",color:"#F472B6"},
-      {id:"composition",label:"Composition",color:"#FB7185"}]}
+      {id:"composition",label:"Composition",color:"#FB7185"}]},
+  { id:"postproduction", label:"PostProduction", color:"#6B9ECC",
+    phases:[
+      {id:"edit",label:"Edit",color:"#6B9ECC"},
+      {id:"color_grading",label:"Color Grading",color:"#93C5FD"},
+      {id:"sound_post",label:"Sound (Dub, Music, SFX, Mix)",color:"#A5B4FC"}]}
 ];
 const ALL_PHASES = PHASE_CATEGORIES.flatMap(c=>c.phases.map(p=>({...p,categoryId:c.id,categoryLabel:c.label,categoryColor:c.color})));
 const getPhase = id => ALL_PHASES.find(p=>p.id===id);
@@ -89,7 +94,8 @@ const PHASE_ROLE_MAP = {
   storyboard_reel:"storyboard_artist", design:"designer",
   modeling:"modeler", texture_shading:"texture_shading", rigging:"rigger",
   animation_main:"animator", lighting_render:"lighting_render",
-  simulation:"simulator", fx:"fx_artist", composition:"compositor"
+  simulation:"simulator", fx:"fx_artist", composition:"compositor",
+  edit:"editor", color_grading:"colorist", sound_post:"sound"
 };
 
 const VIDEO_TYPES = ["광고/상업 영상","유튜브/SNS 콘텐츠","Game Cinematic","모션그래픽","2D 애니메이션","3D 애니메이션"];
@@ -838,33 +844,47 @@ function SummaryTab({project, schedule, quote}) {
       {quote.items.length>0 && (
         <Card>
           <h3 style={{margin:"0 0 16px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>💰 견적 요약</h3>
-          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
-            {ROLE_CATEGORIES.map(cat=>{
-              const catItems = quote.items.filter(i=>i.categoryId===cat.id);
-              if (catItems.length===0) return null;
-              return (
-                <div key={cat.id}>
-                  <div style={{fontSize:11,color:cat.color,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4,marginTop:8}}>{cat.label}</div>
-                  {catItems.map(item=>{
-                    const r   = getRole(item.roleId);
-                    const amt = r?.isContingency ? prodSub*0.05 : calcLine(item);
-                    const detail = (!r?.isContingency && item.unit==="일")
-                      ? `${item.headcount||1}명 × ${item.utilization??100}% × ${item.days||item.qty||1}일`
-                      : (!r?.isContingency ? `${item.headcount||1}명 × ${item.days||item.qty||1}${item.unit}` : "");
-                    return (
-                      <div key={item.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"4px 0",borderBottom:"1px solid #F3F4F6"}}>
-                        <span style={{color:"#374151"}}>{item.label} <span style={{fontSize:11,color:"#9CA3AF"}}>{detail}</span></span>
-                        <span style={{color:"#1A1A2E",fontWeight:600}}>₩{formatNum(Math.round(amt))}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between",paddingTop:12,borderTop:"2px solid #C8102E"}}>
-            <span style={{fontSize:16,fontWeight:800,color:"#C8102E"}}>총 견적금액</span>
-            <span style={{fontSize:20,fontWeight:900,color:"#C8102E"}}>₩{formatNum(Math.round(grandTotal))}</span>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{background:"#F4F5F7"}}>
+                  {["항목","인원 × 투입률 × 일수","단가","금액"].map((h,i)=>(
+                    <th key={i} style={{padding:"8px 12px",textAlign:i===0?"left":"right",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"2px solid #E5E7EB",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ROLE_CATEGORIES.map(cat=>{
+                  const catItems = quote.items.filter(i=>i.categoryId===cat.id);
+                  if (catItems.length===0) return null;
+                  return [
+                    <tr key={`cat-${cat.id}`}>
+                      <td colSpan={4} style={{padding:"10px 12px 4px",fontSize:11,fontWeight:700,color:cat.color,textTransform:"uppercase",letterSpacing:"0.08em",borderBottom:`1px solid ${cat.color}33`}}>{cat.label}</td>
+                    </tr>,
+                    ...catItems.map((item,ri)=>{
+                      const r   = getRole(item.roleId);
+                      const amt = r?.isContingency ? prodSub*0.05 : calcLine(item);
+                      const detail = r?.isContingency ? "5% 자동"
+                        : (item.unit==="일" ? `${item.headcount||1}명 × ${item.utilization??100}% × ${item.days||item.qty||1}일` : `${item.headcount||1}명 × ${item.days||item.qty||1}${item.unit}`);
+                      return (
+                        <tr key={item.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>
+                          <td style={{padding:"8px 12px",borderBottom:"1px solid #F3F4F6",color:"#1A1A2E",fontWeight:600}}>{item.label}</td>
+                          <td style={{padding:"8px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"right",color:"#6B7280",fontSize:12,whiteSpace:"nowrap"}}>{detail}</td>
+                          <td style={{padding:"8px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"right",color:"#6B7280",whiteSpace:"nowrap"}}>{r?.isContingency?"-":`₩${formatNum(item.rate)}`}</td>
+                          <td style={{padding:"8px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"right",color:"#1A1A2E",fontWeight:700,whiteSpace:"nowrap"}}>₩{formatNum(Math.round(amt))}</td>
+                        </tr>
+                      );
+                    })
+                  ];
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{borderTop:"2px solid #C8102E"}}>
+                  <td colSpan={3} style={{padding:"12px",fontSize:16,fontWeight:800,color:"#C8102E"}}>총 견적금액</td>
+                  <td style={{padding:"12px",textAlign:"right",fontSize:20,fontWeight:900,color:"#C8102E",whiteSpace:"nowrap"}}>₩{formatNum(Math.round(grandTotal))}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </Card>
       )}
