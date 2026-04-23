@@ -747,6 +747,11 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
                   <div style={{marginTop:8,fontSize:10,color:"#9CA3AF",textAlign:"right"}}>
                     소계 = 인원 × 투입률(%) ÷ 100 × 일수 × 단가
                   </div>
+                  {/* 카테고리 소계 */}
+                  <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${cat.color}33`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.05em"}}>{cat.label} 소계</span>
+                    <span style={{fontSize:17,fontWeight:900,color:cat.color}}>₩{formatNum(Math.round(catSub))}</span>
+                  </div>
                 </>
               )}
           </Card>
@@ -1181,10 +1186,18 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   // Preprod: design + storyboard in parallel (estimate ~25% of modeling, min 10 days)
   const prepDays0 = Math.max(10, Math.round(modelDays0 * 0.25));
 
-  // Critical path: preprod → modeling → max(rigging ∥ lookdev) → animation → max(lr ∥ fx ∥ sim) → composition
-  const parallelRigLd0   = Math.max(rigDays0, ldDays0);
-  const parallelLrFxSim0 = Math.max(lrDays0, fxDays0, simDays0);
-  const critical0 = prepDays0 + modelDays0 + parallelRigLd0 + anDays0 + parallelLrFxSim0 + coDays0;
+  // Overlap factor: next phase starts when this fraction of previous phase is done (20% overlap)
+  const OL = 0.8;
+  const ol0 = d => Math.round(d * OL);
+
+  // Critical path with overlaps:
+  // preprod → (modeling OL) → (max(rig,ld) OL) → (anim OL) → (max(lr,fx,sim) OL) → comp
+  const critical0 = prepDays0
+                  + ol0(modelDays0)
+                  + ol0(Math.max(rigDays0, ldDays0))
+                  + ol0(anDays0)
+                  + ol0(Math.max(lrDays0, fxDays0, simDays0))
+                  + coDays0;
 
   // Scale to fit within deadline
   let scale = 1;
@@ -1195,6 +1208,7 @@ function calcAutoSchedule(project, standards, projectStartDate) {
 
   const sd = d => d>0 ? Math.max(1, Math.floor(d/scale)) : 0;
   const sh = h => Math.ceil(h*scale);
+  const ol = d => Math.round(d * OL);
 
   const prepDays  = sd(prepDays0);
   const modelDays = sd(modelDays0);
@@ -1214,15 +1228,37 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const simHC     = sh(simHC0);
   const coHC      = sh(coHC0);
 
-  const parallelRigLd   = Math.max(rigDays, ldDays);
-  const parallelLrFxSim = Math.max(lrDays, fxDays, simDays);
-  const totalDur = prepDays + modelDays + parallelRigLd + anDays + parallelLrFxSim + coDays;
-  const projEnd  = deadline || addDays(start, totalDur);
-
   const mk = (phaseId, s, e, hc) => ({id:Date.now()+Math.random(),phaseId,startDate:s,endDate:e,assignee:`${hc}명`});
 
+  // Phase start/end dates with overlapping pipeline
+  // Preprod fully done before modeling starts
+  const prepEnd    = addDays(start, prepDays);
+  const modelEnd   = addDays(prepEnd, modelDays);
+
+  // Rigging + LookDev: start when modeling is OL done
+  const rigLdStart = addDays(prepEnd, ol(modelDays));
+  const rigEnd     = addDays(rigLdStart, rigDays);
+  const ldEnd      = addDays(rigLdStart, ldDays);
+
+  // Animation: starts when max(rig, ld) is OL done
+  const anStart    = addDays(rigLdStart, ol(Math.max(rigDays, ldDays)));
+  const anEnd      = addDays(anStart, anDays);
+
+  // LR + FX + Sim: start when animation is OL done
+  // FX and Sim end before LR (naturally shorter or same; LR longer for 4K)
+  const fxSimLrStart = addDays(anStart, ol(anDays));
+  const lrEnd      = addDays(fxSimLrStart, lrDays);
+  const fxEnd      = addDays(fxSimLrStart, fxDays);
+  const simEnd     = addDays(fxSimLrStart, simDays);
+
+  // Composition: starts when max(lr, fx, sim) is OL done
+  const coStart    = addDays(fxSimLrStart, ol(Math.max(lrDays, fxDays, simDays)));
+  const coEnd      = addDays(coStart, coDays);
+
+  const projEnd = deadline || coEnd;
+
   const phases = [];
-  if (totalDur > 0) {
+  if (coDays > 0 || anDays > 0 || modelDays > 0) {
     // Management: full span
     phases.push(mk("pd",         start, projEnd, 1));
     phases.push(mk("director",   start, projEnd, 1));
@@ -1230,39 +1266,19 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   }
 
   // Preprod: design & storyboard in parallel
-  const prepEnd = addDays(start, prepDays);
   if (prepDays > 0) {
     phases.push(mk("design",         start, prepEnd, 1));
     phases.push(mk("storyboard_reel",start, prepEnd, 1));
   }
 
-  // Modeling
-  const modelEnd = addDays(prepEnd, modelDays);
-  if (modelDays > 0) phases.push(mk("modeling", prepEnd, modelEnd, modelHC));
-
-  // Rigging ∥ LookDev (both start after modeling)
-  const rigEnd = addDays(modelEnd, rigDays);
-  const ldEnd  = addDays(modelEnd, ldDays);
-  if (rigDays > 0) phases.push(mk("rigging",         modelEnd, rigEnd, rigHC));
-  if (ldDays  > 0) phases.push(mk("texture_shading", modelEnd, ldEnd,  ldHC));
-
-  // Animation (after max of rigging/lookdev)
-  const anStart = addDays(modelEnd, parallelRigLd);
-  const anEnd   = addDays(anStart, anDays);
-  if (anDays > 0) phases.push(mk("animation_main", anStart, anEnd, anHC));
-
-  // LR ∥ FX ∥ Simulation (all start after animation)
-  const lrEnd  = addDays(anEnd, lrDays);
-  const fxEnd  = addDays(anEnd, fxDays);
-  const simEnd = addDays(anEnd, simDays);
-  if (lrDays  > 0) phases.push(mk("lighting_render", anEnd, lrEnd,  lrHC));
-  if (fxDays  > 0) phases.push(mk("fx",              anEnd, fxEnd,  fxHC));
-  if (simDays > 0) phases.push(mk("simulation",      anEnd, simEnd, simHC));
-
-  // Composition (after max of lr/fx/sim)
-  const coStart = addDays(anEnd, parallelLrFxSim);
-  const coEnd   = addDays(coStart, coDays);
-  if (coDays > 0) phases.push(mk("composition", coStart, coEnd, coHC));
+  if (modelDays > 0) phases.push(mk("modeling",        prepEnd,    modelEnd, modelHC));
+  if (rigDays  > 0) phases.push(mk("rigging",          rigLdStart, rigEnd,   rigHC));
+  if (ldDays   > 0) phases.push(mk("texture_shading",  rigLdStart, ldEnd,    ldHC));
+  if (anDays   > 0) phases.push(mk("animation_main",   anStart,    anEnd,    anHC));
+  if (lrDays   > 0) phases.push(mk("lighting_render",  fxSimLrStart, lrEnd,  lrHC));
+  if (fxDays   > 0) phases.push(mk("fx",               fxSimLrStart, fxEnd,  fxHC));
+  if (simDays  > 0) phases.push(mk("simulation",       fxSimLrStart, simEnd, simHC));
+  if (coDays   > 0) phases.push(mk("composition",      coStart,    coEnd,    coHC));
 
   const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC};
   return {phases, headcounts};
