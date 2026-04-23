@@ -814,7 +814,7 @@ function StandardsTab({standards, onChange}) {
   const updateProd  = (id,field,val) => onChange({...standards, production: standards.production.map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
 
   const assetCats = ["모델링","룩댑","리깅"];
-  const prodCats  = ["애니메이션","라이팅&렌더","FX","합성"];
+  const prodCats  = ["애니메이션","라이팅&렌더","FX","합성","시뮬레이션"];
   const qColor    = {S:"#C8102E",A:"#F59E0B",B:"#34D399"};
   const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:6,padding:"4px 8px",color:"#1A1A2E",fontSize:12,outline:"none",textAlign:"right",width:70};
   const th = {padding:"8px 12px",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"2px solid #E5E7EB",background:"#F4F5F7",whiteSpace:"nowrap"};
@@ -1113,6 +1113,12 @@ const DEFAULT_STANDARDS = {
     {id:"co_b_fhd_30",cat:"합성",q:"B",res:"FHD",fps:30,spw:7,  hc:1},
     {id:"co_b_4k_24", cat:"합성",q:"B",res:"4K", fps:24,spw:7,  hc:1},
     {id:"co_b_4k_30", cat:"합성",q:"B",res:"4K", fps:30,spw:5,  hc:1},
+    {id:"sim_s_24",cat:"시뮬레이션",q:"S",res:"",fps:24,spw:4,  hc:1},
+    {id:"sim_s_30",cat:"시뮬레이션",q:"S",res:"",fps:30,spw:3.5,hc:1},
+    {id:"sim_a_24",cat:"시뮬레이션",q:"A",res:"",fps:24,spw:6,  hc:1},
+    {id:"sim_a_30",cat:"시뮬레이션",q:"A",res:"",fps:30,spw:5.2,hc:1},
+    {id:"sim_b_24",cat:"시뮬레이션",q:"B",res:"",fps:24,spw:9,  hc:1},
+    {id:"sim_b_30",cat:"시뮬레이션",q:"B",res:"",fps:30,spw:7.9,hc:1},
   ]
 };
 
@@ -1146,36 +1152,39 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const rigWork   = chars*(fa("리깅","캐릭터 1종",q)?.days||0)
                   + props*(fa("리깅","프랍 1종",q)?.days||0);
 
-  const anSpw  = fp("애니메이션",q,fps)?.spw  || 1;
+  const anSpw  = fp("애니메이션",q,fps)?.spw     || 1;
   const lrSpw  = fp("라이팅&렌더",q,fps,res)?.spw || 1;
-  const fxSpw  = fp("FX",q,fps)?.spw          || 1;
-  const coSpw  = fp("합성",q,fps,res)?.spw    || 1;
+  const fxSpw  = fp("FX",q,fps)?.spw             || 1;
+  const simSpw = fp("시뮬레이션",q,fps)?.spw      || 1;
+  const coSpw  = fp("합성",q,fps,res)?.spw        || 1;
 
   // Base headcounts from standards (hc field)
-  const modelHC0 = fa("모델링","캐릭터 1종",q)?.hc || 1;
-  const ldHC0    = fa("룩댑","캐릭터 1종",q,res)?.hc || 1;
-  const rigHC0   = fa("리깅","캐릭터 1종",q)?.hc || 1;
-  const anHC0    = fp("애니메이션",q,fps)?.hc  || 1;
-  const lrHC0    = fp("라이팅&렌더",q,fps,res)?.hc || 1;
-  const fxHC0    = fp("FX",q,fps)?.hc          || 1;
-  const coHC0    = fp("합성",q,fps,res)?.hc    || 1;
+  const modelHC0 = fa("모델링","캐릭터 1종",q)?.hc    || 1;
+  const ldHC0    = fa("룩댑","캐릭터 1종",q,res)?.hc  || 1;
+  const rigHC0   = fa("리깅","캐릭터 1종",q)?.hc      || 1;
+  const anHC0    = fp("애니메이션",q,fps)?.hc          || 1;
+  const lrHC0    = fp("라이팅&렌더",q,fps,res)?.hc    || 1;
+  const fxHC0    = fp("FX",q,fps)?.hc                  || 1;
+  const simHC0   = fp("시뮬레이션",q,fps)?.hc          || 1;
+  const coHC0    = fp("합성",q,fps,res)?.hc            || 1;
 
   // Base durations: work / headcount
   const modelDays0 = modelWork>0 ? Math.ceil(modelWork/modelHC0) : 0;
   const ldDays0    = ldWork>0    ? Math.ceil(ldWork/ldHC0)       : 0;
   const rigDays0   = rigWork>0   ? Math.ceil(rigWork/rigHC0)     : 0;
-  const anDays0    = totalSecs>0 ? Math.ceil((totalSecs/anSpw)*7/anHC0) : 0;
-  const lrDays0    = totalSecs>0 ? Math.ceil((totalSecs/lrSpw)*7/lrHC0) : 0;
-  const fxDays0    = totalSecs>0 ? Math.ceil((totalSecs/fxSpw)*7/fxHC0) : 0;
-  const coDays0    = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0) : 0;
+  const anDays0    = totalSecs>0 ? Math.ceil((totalSecs/anSpw)*7/anHC0)  : 0;
+  const lrDays0    = totalSecs>0 ? Math.ceil((totalSecs/lrSpw)*7/lrHC0)  : 0;
+  const fxDays0    = totalSecs>0 ? Math.ceil((totalSecs/fxSpw)*7/fxHC0)  : 0;
+  const simDays0   = totalSecs>0 ? Math.ceil((totalSecs/simSpw)*7/simHC0): 0;
+  const coDays0    = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0)  : 0;
 
   // Preprod: design + storyboard in parallel (estimate ~25% of modeling, min 10 days)
   const prepDays0 = Math.max(10, Math.round(modelDays0 * 0.25));
 
-  // Critical path: preprod → modeling → max(rigging ∥ lookdev) → animation → max(lr ∥ fx) → composition
-  const parallelRigLd0 = Math.max(rigDays0, ldDays0);
-  const parallelLrFx0  = Math.max(lrDays0, fxDays0);
-  const critical0 = prepDays0 + modelDays0 + parallelRigLd0 + anDays0 + parallelLrFx0 + coDays0;
+  // Critical path: preprod → modeling → max(rigging ∥ lookdev) → animation → max(lr ∥ fx ∥ sim) → composition
+  const parallelRigLd0   = Math.max(rigDays0, ldDays0);
+  const parallelLrFxSim0 = Math.max(lrDays0, fxDays0, simDays0);
+  const critical0 = prepDays0 + modelDays0 + parallelRigLd0 + anDays0 + parallelLrFxSim0 + coDays0;
 
   // Scale to fit within deadline
   let scale = 1;
@@ -1194,6 +1203,7 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const anDays    = sd(anDays0);
   const lrDays    = sd(lrDays0);
   const fxDays    = sd(fxDays0);
+  const simDays   = sd(simDays0);
   const coDays    = sd(coDays0);
   const modelHC   = sh(modelHC0);
   const ldHC      = sh(ldHC0);
@@ -1201,11 +1211,12 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const anHC      = sh(anHC0);
   const lrHC      = sh(lrHC0);
   const fxHC      = sh(fxHC0);
+  const simHC     = sh(simHC0);
   const coHC      = sh(coHC0);
 
-  const parallelRigLd = Math.max(rigDays, ldDays);
-  const parallelLrFx  = Math.max(lrDays, fxDays);
-  const totalDur = prepDays + modelDays + parallelRigLd + anDays + parallelLrFx + coDays;
+  const parallelRigLd   = Math.max(rigDays, ldDays);
+  const parallelLrFxSim = Math.max(lrDays, fxDays, simDays);
+  const totalDur = prepDays + modelDays + parallelRigLd + anDays + parallelLrFxSim + coDays;
   const projEnd  = deadline || addDays(start, totalDur);
 
   const mk = (phaseId, s, e, hc) => ({id:Date.now()+Math.random(),phaseId,startDate:s,endDate:e,assignee:`${hc}명`});
@@ -1221,8 +1232,8 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   // Preprod: design & storyboard in parallel
   const prepEnd = addDays(start, prepDays);
   if (prepDays > 0) {
-    phases.push(mk("design",         start,   prepEnd, 1));
-    phases.push(mk("storyboard_reel",start,   prepEnd, 1));
+    phases.push(mk("design",         start, prepEnd, 1));
+    phases.push(mk("storyboard_reel",start, prepEnd, 1));
   }
 
   // Modeling
@@ -1240,18 +1251,20 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const anEnd   = addDays(anStart, anDays);
   if (anDays > 0) phases.push(mk("animation_main", anStart, anEnd, anHC));
 
-  // LR ∥ FX (both start after animation)
-  const lrEnd = addDays(anEnd, lrDays);
-  const fxEnd = addDays(anEnd, fxDays);
-  if (lrDays > 0) phases.push(mk("lighting_render", anEnd, lrEnd, lrHC));
-  if (fxDays > 0) phases.push(mk("fx",              anEnd, fxEnd, fxHC));
+  // LR ∥ FX ∥ Simulation (all start after animation)
+  const lrEnd  = addDays(anEnd, lrDays);
+  const fxEnd  = addDays(anEnd, fxDays);
+  const simEnd = addDays(anEnd, simDays);
+  if (lrDays  > 0) phases.push(mk("lighting_render", anEnd, lrEnd,  lrHC));
+  if (fxDays  > 0) phases.push(mk("fx",              anEnd, fxEnd,  fxHC));
+  if (simDays > 0) phases.push(mk("simulation",      anEnd, simEnd, simHC));
 
-  // Composition (after max of lr/fx)
-  const coStart = addDays(anEnd, parallelLrFx);
+  // Composition (after max of lr/fx/sim)
+  const coStart = addDays(anEnd, parallelLrFxSim);
   const coEnd   = addDays(coStart, coDays);
   if (coDays > 0) phases.push(mk("composition", coStart, coEnd, coHC));
 
-  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,comp:coHC};
+  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC};
   return {phases, headcounts};
 }
 
@@ -1297,7 +1310,7 @@ function App() {
     setQuote(q=>({...q, items: syncQuoteFromSchedule(phases, q.items).map(item=>{
       const roleId = item.roleId;
       const phaseId = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===roleId)?.[0];
-      const hcMap = {modeling:"model",texture_shading:"lookDev",rigging:"rigging",animation_main:"anim",lighting_render:"lr",fx:"fx",composition:"comp"};
+      const hcMap = {modeling:"model",texture_shading:"lookDev",rigging:"rigging",animation_main:"anim",lighting_render:"lr",fx:"fx",simulation:"sim",composition:"comp"};
       const hc = hcMap[phaseId];
       return hc && headcounts[hc] ? {...item, headcount: headcounts[hc]} : item;
     })}));
