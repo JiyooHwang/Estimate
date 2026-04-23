@@ -509,75 +509,88 @@ function ScheduleTab({schedule, onChange, projectStart, ganttStart, setGanttStar
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
-      <Card>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:12}}>
-          <h3 style={{margin:0,color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>
-            📊 Gantt Chart
-            {totalDays!==null && <span style={{marginLeft:10,fontSize:12,color:"#6B7280",fontWeight:400,textTransform:"none"}}>총 {totalDays}일</span>}
-          </h3>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B7280"}}>시작 <input type="date" value={ganttStart} onChange={e=>setGanttStart(e.target.value)} style={dateInS} /></label>
-            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B7280"}}>종료 <input type="date" value={ganttEnd} onChange={e=>setGanttEnd(e.target.value)} style={dateInS} /></label>
-          </div>
-        </div>
-        {schedule.phases.length===0
-          ? <div style={{textAlign:"center",color:"#6B7280",padding:"32px 0",fontSize:13}}>아래에서 단계를 추가하면 차트가 표시됩니다</div>
-          : <GanttChart phases={schedule.phases} ganttStart={ganttStart} ganttEnd={ganttEnd} onUpdate={updatePhaseDates} />}
-      </Card>
+      {/* 2컬럼: 좌측 간트, 우측 카테고리 카드 */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 400px",gap:20,alignItems:"start"}}>
 
-      {PHASE_CATEGORIES.map(cat=>{
-        const catPhases  = schedule.phases.filter(p=>getPhase(p.phaseId)?.categoryId===cat.id);
-        const addable    = cat.phases.filter(ph=>!schedule.phases.find(p=>p.phaseId===ph.id));
-        return (
-          <Card key={cat.id} style={{borderColor:`${cat.color}33`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:4,height:18,borderRadius:2,background:cat.color}} />
-                <h3 style={{margin:0,fontSize:14,fontWeight:800,color:cat.color,letterSpacing:"0.05em"}}>{cat.label}</h3>
-              </div>
-              {addable.length>0 && (
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                  {addable.map(ph=>(
-                    <button key={ph.id} onClick={()=>addPhase(cat.id,ph.id)} style={{background:`${ph.color}22`,border:`1px solid ${ph.color}55`,borderRadius:6,padding:"4px 10px",color:ph.color,fontSize:11,fontWeight:700,cursor:"pointer"}}>+ {ph.label}</button>
-                  ))}
-                </div>
-              )}
+        {/* 좌측: 간트 차트 */}
+        <Card style={{minWidth:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:12}}>
+            <h3 style={{margin:0,color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>
+              📊 Gantt Chart
+              {totalDays!==null && <span style={{marginLeft:10,fontSize:12,color:"#6B7280",fontWeight:400,textTransform:"none"}}>총 {totalDays}일</span>}
+            </h3>
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B7280"}}>시작 <input type="date" value={ganttStart} onChange={e=>setGanttStart(e.target.value)} style={dateInS} /></label>
+              <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B7280"}}>종료 <input type="date" value={ganttEnd} onChange={e=>setGanttEnd(e.target.value)} style={dateInS} /></label>
             </div>
-            {catPhases.length===0
-              ? <div style={{color:"#6B7280",fontSize:12,padding:"8px 0"}}>위 버튼으로 단계를 추가하세요</div>
-              : (
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  <div style={{display:"grid",gridTemplateColumns:"130px 1fr 1fr 1fr auto",gap:8,padding:"0 4px"}}>
-                    {["단계","시작일","종료일","담당자",""].map((h,i)=>(
-                      <span key={i} style={{fontSize:10,color:"#6B7280",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em"}}>{h}</span>
-                    ))}
-                  </div>
-                  {catPhases.map(p=>{
-                    const ph  = getPhase(p.phaseId);
-                    const dur = p.startDate&&p.endDate ? daysBetween(p.startDate,p.endDate) : null;
-                    const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:7,padding:"6px 8px",color:"#1A1A2E",fontSize:12,outline:"none"};
-                    return (
-                      <div key={p.id} style={{display:"grid",gridTemplateColumns:"130px 1fr 1fr 1fr auto",gap:8,alignItems:"center",padding:"8px 10px",borderRadius:10,background:`${ph?.color||"#888"}0d`,border:`1px solid ${ph?.color||"#888"}22`}}>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <div style={{width:8,height:8,borderRadius:2,background:ph?.color,flexShrink:0}} />
-                          <span style={{fontSize:12,color:"#1A1A2E",fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ph?.label}</span>
-                        </div>
-                        <input type="date" value={p.startDate} onChange={e=>updatePhase(p.id,"startDate",e.target.value)} style={inS} />
-                        <div style={{display:"flex",alignItems:"center",gap:5}}>
-                          <input type="date" value={p.endDate} onChange={e=>updatePhase(p.id,"endDate",e.target.value)} style={{...inS,flex:1}} />
-                          {dur!==null && <span style={{fontSize:10,color:"#6B7280",whiteSpace:"nowrap"}}>{dur}일</span>}
-                        </div>
-                        <input value={p.assignee} onChange={e=>updatePhase(p.id,"assignee",e.target.value)} placeholder="담당자" style={inS} />
-                        <button onClick={()=>removePhase(p.id)} style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:6,padding:"5px 9px",color:"#EF4444",cursor:"pointer",fontSize:11}}>✕</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-          </Card>
-        );
-      })}
+          </div>
+          {schedule.phases.length===0
+            ? <div style={{textAlign:"center",color:"#6B7280",padding:"32px 0",fontSize:13}}>오른쪽에서 단계를 추가하면 차트가 표시됩니다</div>
+            : <GanttChart phases={schedule.phases} ganttStart={ganttStart} ganttEnd={ganttEnd} onUpdate={updatePhaseDates} />}
+        </Card>
 
+        {/* 우측: 카테고리 카드 패널 */}
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {PHASE_CATEGORIES.map(cat=>{
+            const catPhases = schedule.phases.filter(p=>getPhase(p.phaseId)?.categoryId===cat.id);
+            const addable   = cat.phases.filter(ph=>!schedule.phases.find(p=>p.phaseId===ph.id));
+            const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:6,padding:"5px 6px",color:"#1A1A2E",fontSize:11,outline:"none",width:"100%"};
+            return (
+              <Card key={cat.id} style={{borderColor:`${cat.color}33`,padding:"16px 18px"}}>
+                {/* 카테고리 헤더 */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{width:3,height:16,borderRadius:2,background:cat.color}} />
+                    <span style={{fontSize:13,fontWeight:800,color:cat.color,letterSpacing:"0.04em"}}>{cat.label}</span>
+                  </div>
+                  {addable.length>0 && (
+                    <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                      {addable.map(ph=>(
+                        <button key={ph.id} onClick={()=>addPhase(cat.id,ph.id)} style={{background:`${ph.color}22`,border:`1px solid ${ph.color}55`,borderRadius:5,padding:"3px 8px",color:ph.color,fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>+ {ph.label}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {catPhases.length===0
+                  ? <div style={{color:"#9CA3AF",fontSize:11,padding:"4px 0"}}>위 버튼으로 단계를 추가하세요</div>
+                  : (
+                    <>
+                      {/* 헤더 행 */}
+                      <div style={{display:"grid",gridTemplateColumns:"90px 1fr 1fr 80px 22px",gap:4,padding:"0 2px",marginBottom:4}}>
+                        {["단계","시작일","종료일","담당자",""].map((h,i)=>(
+                          <span key={i} style={{fontSize:9,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</span>
+                        ))}
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {catPhases.map(p=>{
+                          const ph  = getPhase(p.phaseId);
+                          const dur = p.startDate&&p.endDate ? daysBetween(p.startDate,p.endDate) : null;
+                          return (
+                            <div key={p.id} style={{display:"grid",gridTemplateColumns:"90px 1fr 1fr 80px 22px",gap:4,alignItems:"center",padding:"6px 8px",borderRadius:8,background:`${ph?.color||"#888"}0d`,border:`1px solid ${ph?.color||"#888"}22`}}>
+                              <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}>
+                                <div style={{width:7,height:7,borderRadius:2,background:ph?.color,flexShrink:0}} />
+                                <span style={{fontSize:11,color:"#1A1A2E",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph?.label}</span>
+                              </div>
+                              <input type="date" value={p.startDate} onChange={e=>updatePhase(p.id,"startDate",e.target.value)} style={inS} />
+                              <div style={{display:"flex",alignItems:"center",gap:3}}>
+                                <input type="date" value={p.endDate} onChange={e=>updatePhase(p.id,"endDate",e.target.value)} style={{...inS,flex:1}} />
+                                {dur!==null && <span style={{fontSize:9,color:"#9CA3AF",whiteSpace:"nowrap"}}>{dur}일</span>}
+                              </div>
+                              <input value={p.assignee} onChange={e=>updatePhase(p.id,"assignee",e.target.value)} placeholder="담당자" style={inS} />
+                              <button onClick={()=>removePhase(p.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:5,padding:"3px 5px",color:"#EF4444",cursor:"pointer",fontSize:10,lineHeight:1}}>✕</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 하단: 메모 */}
       <Card>
         <h3 style={{margin:"0 0 12px",color:"#C8102E",fontSize:13,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>📝 일정 메모</h3>
         <textarea value={schedule.note} onChange={e=>onChange("note",e.target.value)} rows={3} placeholder="특이사항, 리뷰 일정, 클라이언트 피드백 일정 등"
