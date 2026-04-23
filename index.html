@@ -1010,7 +1010,10 @@ function App() {
                         <div style={{fontWeight:700,fontSize:14}}>{entry.project.name||"무제 프로젝트"}</div>
                         <div style={{fontSize:11,color:"#6B7280"}}>{entry.project.client&&`${entry.project.client} · `}{entry.savedAt}</div>
                       </div>
-                      <button onClick={()=>loadProjectEntry(entry)} style={{...btnBase,background:"#C8102E",color:"#fff",padding:"6px 14px"}}>불러오기</button>
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>loadProjectEntry(entry)} style={{...btnBase,background:"#C8102E",color:"#fff",padding:"6px 14px"}}>불러오기</button>
+                        <button onClick={()=>{if(window.confirm(`"${entry.project.name||"무제 프로젝트"}"를 삭제하시겠습니까?`))setProjects(prev=>prev.filter(p=>p.id!==entry.id));}} style={{...btnBase,background:"rgba(239,68,68,0.1)",color:"#EF4444",border:"1px solid rgba(239,68,68,0.25)",padding:"6px 10px"}}>🗑</button>
+                      </div>
                     </div>
                   ))}
                 </div>}
