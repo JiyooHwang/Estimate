@@ -810,8 +810,8 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
 
 /* ── 기준표 탭 ────────────────────────────────────────────────────────── */
 function StandardsTab({standards, onChange}) {
-  const updateAsset = (id,val) => onChange({...standards, asset: standards.asset.map(s=>s.id===id?{...s,days:Number(val)}:s)});
-  const updateProd  = (id,val) => onChange({...standards, production: standards.production.map(s=>s.id===id?{...s,spw:Number(val)}:s)});
+  const updateAsset = (id,field,val) => onChange({...standards, asset: standards.asset.map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
+  const updateProd  = (id,field,val) => onChange({...standards, production: standards.production.map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
 
   const assetCats = ["모델링","룩댑","리깅"];
   const prodCats  = ["애니메이션","라이팅&렌더","FX","합성"];
@@ -833,7 +833,7 @@ function StandardsTab({standards, onChange}) {
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                   <thead>
                     <tr>
-                      {["분량","등급",cat==="룩댑"?"해상도":"","기간(일)"].filter(Boolean).map((h,i)=>(
+                      {["분량","등급",cat==="룩댑"?"해상도":"","인원","기간(일)"].filter(Boolean).map((h,i)=>(
                         <th key={i} style={{...th,textAlign:i>0?"center":"left",padding:"6px 8px"}}>{h}</th>
                       ))}
                     </tr>
@@ -847,7 +847,10 @@ function StandardsTab({standards, onChange}) {
                         </td>
                         {cat==="룩댑" && <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"center",fontSize:11,color:"#6B7280"}}>{s.res}</td>}
                         <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"right"}}>
-                          <input type="number" min="1" value={s.days} onChange={e=>updateAsset(s.id,e.target.value)} style={inS} />
+                          <input type="number" min="1" value={s.hc??1} onChange={e=>updateAsset(s.id,"hc",e.target.value)} style={{...inS,width:50}} />
+                        </td>
+                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"right"}}>
+                          <input type="number" min="1" value={s.days} onChange={e=>updateAsset(s.id,"days",e.target.value)} style={inS} />
                         </td>
                       </tr>
                     ))}
@@ -872,7 +875,7 @@ function StandardsTab({standards, onChange}) {
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                   <thead>
                     <tr>
-                      {["등급",hasRes?"해상도":"","FPS","초/주(1인)"].filter(Boolean).map((h,i)=>(
+                      {["등급",hasRes?"해상도":"","FPS","인원","초/주(1인)"].filter(Boolean).map((h,i)=>(
                         <th key={i} style={{...th,textAlign:i>0?"center":"left",padding:"6px 8px"}}>{h}</th>
                       ))}
                     </tr>
@@ -886,7 +889,10 @@ function StandardsTab({standards, onChange}) {
                         {hasRes && <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"center",fontSize:11,color:"#6B7280"}}>{s.res||"-"}</td>}
                         <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"center",fontSize:11,color:"#6B7280"}}>{s.fps} fps</td>
                         <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"right"}}>
-                          <input type="number" min="0.1" step="0.1" value={s.spw} onChange={e=>updateProd(s.id,e.target.value)} style={inS} />
+                          <input type="number" min="1" value={s.hc??1} onChange={e=>updateProd(s.id,"hc",e.target.value)} style={{...inS,width:50}} />
+                        </td>
+                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"right"}}>
+                          <input type="number" min="0.1" step="0.1" value={s.spw} onChange={e=>updateProd(s.id,"spw",e.target.value)} style={inS} />
                         </td>
                       </tr>
                     ))}
@@ -1042,71 +1048,71 @@ const DEFAULT_QUOTE    = {items:[],discountPct:0,includeVat:true};
 /* ── 기준표 기본값 ──────────────────────────────────────────────────────── */
 const DEFAULT_STANDARDS = {
   asset:[
-    {id:"m_c_s",cat:"모델링",item:"캐릭터 1종",q:"S",res:"",days:20},
-    {id:"m_c_a",cat:"모델링",item:"캐릭터 1종",q:"A",res:"",days:15},
-    {id:"m_c_b",cat:"모델링",item:"캐릭터 1종",q:"B",res:"",days:10},
-    {id:"m_p_s",cat:"모델링",item:"프랍 1종",  q:"S",res:"",days:10},
-    {id:"m_p_a",cat:"모델링",item:"프랍 1종",  q:"A",res:"",days:5},
-    {id:"m_p_b",cat:"모델링",item:"프랍 1종",  q:"B",res:"",days:2},
-    {id:"m_b_s",cat:"모델링",item:"배경 1종",  q:"S",res:"",days:40},
-    {id:"m_b_a",cat:"모델링",item:"배경 1종",  q:"A",res:"",days:30},
-    {id:"m_b_b",cat:"모델링",item:"배경 1종",  q:"B",res:"",days:20},
-    {id:"ld_c_s_fhd",cat:"룩댑",item:"캐릭터 1종",q:"S",res:"FHD",days:10},
-    {id:"ld_c_s_4k", cat:"룩댑",item:"캐릭터 1종",q:"S",res:"4K", days:15},
-    {id:"ld_c_a_fhd",cat:"룩댑",item:"캐릭터 1종",q:"A",res:"FHD",days:7},
-    {id:"ld_c_a_4k", cat:"룩댑",item:"캐릭터 1종",q:"A",res:"4K", days:10},
-    {id:"ld_c_b_fhd",cat:"룩댑",item:"캐릭터 1종",q:"B",res:"FHD",days:5},
-    {id:"ld_c_b_4k", cat:"룩댑",item:"캐릭터 1종",q:"B",res:"4K", days:7},
-    {id:"ld_b_s_fhd",cat:"룩댑",item:"배경 1종",  q:"S",res:"FHD",days:15},
-    {id:"ld_b_s_4k", cat:"룩댑",item:"배경 1종",  q:"S",res:"4K", days:20},
-    {id:"ld_b_a_fhd",cat:"룩댑",item:"배경 1종",  q:"A",res:"FHD",days:10},
-    {id:"ld_b_a_4k", cat:"룩댑",item:"배경 1종",  q:"A",res:"4K", days:15},
-    {id:"ld_b_b_fhd",cat:"룩댑",item:"배경 1종",  q:"B",res:"FHD",days:7},
-    {id:"ld_b_b_4k", cat:"룩댑",item:"배경 1종",  q:"B",res:"4K", days:10},
-    {id:"r_c_s",cat:"리깅",item:"캐릭터 1종",q:"S",res:"",days:10},
-    {id:"r_c_a",cat:"리깅",item:"캐릭터 1종",q:"A",res:"",days:7},
-    {id:"r_c_b",cat:"리깅",item:"캐릭터 1종",q:"B",res:"",days:5},
-    {id:"r_p_s",cat:"리깅",item:"프랍 1종",  q:"S",res:"",days:5},
-    {id:"r_p_a",cat:"리깅",item:"프랍 1종",  q:"A",res:"",days:3},
-    {id:"r_p_b",cat:"리깅",item:"프랍 1종",  q:"B",res:"",days:1},
+    {id:"m_c_s",cat:"모델링",item:"캐릭터 1종",q:"S",res:"",days:20,hc:1},
+    {id:"m_c_a",cat:"모델링",item:"캐릭터 1종",q:"A",res:"",days:15,hc:1},
+    {id:"m_c_b",cat:"모델링",item:"캐릭터 1종",q:"B",res:"",days:10,hc:1},
+    {id:"m_p_s",cat:"모델링",item:"프랍 1종",  q:"S",res:"",days:10,hc:1},
+    {id:"m_p_a",cat:"모델링",item:"프랍 1종",  q:"A",res:"",days:5, hc:1},
+    {id:"m_p_b",cat:"모델링",item:"프랍 1종",  q:"B",res:"",days:2, hc:1},
+    {id:"m_b_s",cat:"모델링",item:"배경 1종",  q:"S",res:"",days:40,hc:1},
+    {id:"m_b_a",cat:"모델링",item:"배경 1종",  q:"A",res:"",days:30,hc:1},
+    {id:"m_b_b",cat:"모델링",item:"배경 1종",  q:"B",res:"",days:20,hc:1},
+    {id:"ld_c_s_fhd",cat:"룩댑",item:"캐릭터 1종",q:"S",res:"FHD",days:10,hc:1},
+    {id:"ld_c_s_4k", cat:"룩댑",item:"캐릭터 1종",q:"S",res:"4K", days:15,hc:1},
+    {id:"ld_c_a_fhd",cat:"룩댑",item:"캐릭터 1종",q:"A",res:"FHD",days:7, hc:1},
+    {id:"ld_c_a_4k", cat:"룩댑",item:"캐릭터 1종",q:"A",res:"4K", days:10,hc:1},
+    {id:"ld_c_b_fhd",cat:"룩댑",item:"캐릭터 1종",q:"B",res:"FHD",days:5, hc:1},
+    {id:"ld_c_b_4k", cat:"룩댑",item:"캐릭터 1종",q:"B",res:"4K", days:7, hc:1},
+    {id:"ld_b_s_fhd",cat:"룩댑",item:"배경 1종",  q:"S",res:"FHD",days:15,hc:1},
+    {id:"ld_b_s_4k", cat:"룩댑",item:"배경 1종",  q:"S",res:"4K", days:20,hc:1},
+    {id:"ld_b_a_fhd",cat:"룩댑",item:"배경 1종",  q:"A",res:"FHD",days:10,hc:1},
+    {id:"ld_b_a_4k", cat:"룩댑",item:"배경 1종",  q:"A",res:"4K", days:15,hc:1},
+    {id:"ld_b_b_fhd",cat:"룩댑",item:"배경 1종",  q:"B",res:"FHD",days:7, hc:1},
+    {id:"ld_b_b_4k", cat:"룩댑",item:"배경 1종",  q:"B",res:"4K", days:10,hc:1},
+    {id:"r_c_s",cat:"리깅",item:"캐릭터 1종",q:"S",res:"",days:10,hc:1},
+    {id:"r_c_a",cat:"리깅",item:"캐릭터 1종",q:"A",res:"",days:7, hc:1},
+    {id:"r_c_b",cat:"리깅",item:"캐릭터 1종",q:"B",res:"",days:5, hc:1},
+    {id:"r_p_s",cat:"리깅",item:"프랍 1종",  q:"S",res:"",days:5, hc:1},
+    {id:"r_p_a",cat:"리깅",item:"프랍 1종",  q:"A",res:"",days:3, hc:1},
+    {id:"r_p_b",cat:"리깅",item:"프랍 1종",  q:"B",res:"",days:1, hc:1},
   ],
   production:[
-    {id:"an_s_24",cat:"애니메이션",q:"S",res:"",   fps:24,spw:4},
-    {id:"an_s_30",cat:"애니메이션",q:"S",res:"",   fps:30,spw:3.5},
-    {id:"an_a_24",cat:"애니메이션",q:"A",res:"",   fps:24,spw:6},
-    {id:"an_a_30",cat:"애니메이션",q:"A",res:"",   fps:30,spw:5.2},
-    {id:"an_b_24",cat:"애니메이션",q:"B",res:"",   fps:24,spw:9},
-    {id:"an_b_30",cat:"애니메이션",q:"B",res:"",   fps:30,spw:7.9},
-    {id:"lr_s_fhd_24",cat:"라이팅&렌더",q:"S",res:"FHD",fps:24,spw:4},
-    {id:"lr_s_fhd_30",cat:"라이팅&렌더",q:"S",res:"FHD",fps:30,spw:3},
-    {id:"lr_s_4k_24", cat:"라이팅&렌더",q:"S",res:"4K", fps:24,spw:3},
-    {id:"lr_s_4k_30", cat:"라이팅&렌더",q:"S",res:"4K", fps:30,spw:2},
-    {id:"lr_a_fhd_24",cat:"라이팅&렌더",q:"A",res:"FHD",fps:24,spw:6},
-    {id:"lr_a_fhd_30",cat:"라이팅&렌더",q:"A",res:"FHD",fps:30,spw:4},
-    {id:"lr_a_4k_24", cat:"라이팅&렌더",q:"A",res:"4K", fps:24,spw:5},
-    {id:"lr_a_4k_30", cat:"라이팅&렌더",q:"A",res:"4K", fps:30,spw:3},
-    {id:"lr_b_fhd_24",cat:"라이팅&렌더",q:"B",res:"FHD",fps:24,spw:9},
-    {id:"lr_b_fhd_30",cat:"라이팅&렌더",q:"B",res:"FHD",fps:30,spw:7},
-    {id:"lr_b_4k_24", cat:"라이팅&렌더",q:"B",res:"4K", fps:24,spw:7},
-    {id:"lr_b_4k_30", cat:"라이팅&렌더",q:"B",res:"4K", fps:30,spw:5},
-    {id:"fx_s_24",cat:"FX",q:"S",res:"",fps:24,spw:4},
-    {id:"fx_s_30",cat:"FX",q:"S",res:"",fps:30,spw:3.5},
-    {id:"fx_a_24",cat:"FX",q:"A",res:"",fps:24,spw:6},
-    {id:"fx_a_30",cat:"FX",q:"A",res:"",fps:30,spw:5.2},
-    {id:"fx_b_24",cat:"FX",q:"B",res:"",fps:24,spw:9},
-    {id:"fx_b_30",cat:"FX",q:"B",res:"",fps:30,spw:7.9},
-    {id:"co_s_fhd_24",cat:"합성",q:"S",res:"FHD",fps:24,spw:4},
-    {id:"co_s_fhd_30",cat:"합성",q:"S",res:"FHD",fps:30,spw:3},
-    {id:"co_s_4k_24", cat:"합성",q:"S",res:"4K", fps:24,spw:3},
-    {id:"co_s_4k_30", cat:"합성",q:"S",res:"4K", fps:30,spw:2},
-    {id:"co_a_fhd_24",cat:"합성",q:"A",res:"FHD",fps:24,spw:6},
-    {id:"co_a_fhd_30",cat:"합성",q:"A",res:"FHD",fps:30,spw:4},
-    {id:"co_a_4k_24", cat:"합성",q:"A",res:"4K", fps:24,spw:5},
-    {id:"co_a_4k_30", cat:"합성",q:"A",res:"4K", fps:30,spw:3},
-    {id:"co_b_fhd_24",cat:"합성",q:"B",res:"FHD",fps:24,spw:9},
-    {id:"co_b_fhd_30",cat:"합성",q:"B",res:"FHD",fps:30,spw:7},
-    {id:"co_b_4k_24", cat:"합성",q:"B",res:"4K", fps:24,spw:7},
-    {id:"co_b_4k_30", cat:"합성",q:"B",res:"4K", fps:30,spw:5},
+    {id:"an_s_24",cat:"애니메이션",q:"S",res:"",   fps:24,spw:4,  hc:1},
+    {id:"an_s_30",cat:"애니메이션",q:"S",res:"",   fps:30,spw:3.5,hc:1},
+    {id:"an_a_24",cat:"애니메이션",q:"A",res:"",   fps:24,spw:6,  hc:1},
+    {id:"an_a_30",cat:"애니메이션",q:"A",res:"",   fps:30,spw:5.2,hc:1},
+    {id:"an_b_24",cat:"애니메이션",q:"B",res:"",   fps:24,spw:9,  hc:1},
+    {id:"an_b_30",cat:"애니메이션",q:"B",res:"",   fps:30,spw:7.9,hc:1},
+    {id:"lr_s_fhd_24",cat:"라이팅&렌더",q:"S",res:"FHD",fps:24,spw:4,  hc:1},
+    {id:"lr_s_fhd_30",cat:"라이팅&렌더",q:"S",res:"FHD",fps:30,spw:3,  hc:1},
+    {id:"lr_s_4k_24", cat:"라이팅&렌더",q:"S",res:"4K", fps:24,spw:3,  hc:1},
+    {id:"lr_s_4k_30", cat:"라이팅&렌더",q:"S",res:"4K", fps:30,spw:2,  hc:1},
+    {id:"lr_a_fhd_24",cat:"라이팅&렌더",q:"A",res:"FHD",fps:24,spw:6,  hc:1},
+    {id:"lr_a_fhd_30",cat:"라이팅&렌더",q:"A",res:"FHD",fps:30,spw:4,  hc:1},
+    {id:"lr_a_4k_24", cat:"라이팅&렌더",q:"A",res:"4K", fps:24,spw:5,  hc:1},
+    {id:"lr_a_4k_30", cat:"라이팅&렌더",q:"A",res:"4K", fps:30,spw:3,  hc:1},
+    {id:"lr_b_fhd_24",cat:"라이팅&렌더",q:"B",res:"FHD",fps:24,spw:9,  hc:1},
+    {id:"lr_b_fhd_30",cat:"라이팅&렌더",q:"B",res:"FHD",fps:30,spw:7,  hc:1},
+    {id:"lr_b_4k_24", cat:"라이팅&렌더",q:"B",res:"4K", fps:24,spw:7,  hc:1},
+    {id:"lr_b_4k_30", cat:"라이팅&렌더",q:"B",res:"4K", fps:30,spw:5,  hc:1},
+    {id:"fx_s_24",cat:"FX",q:"S",res:"",fps:24,spw:4,  hc:1},
+    {id:"fx_s_30",cat:"FX",q:"S",res:"",fps:30,spw:3.5,hc:1},
+    {id:"fx_a_24",cat:"FX",q:"A",res:"",fps:24,spw:6,  hc:1},
+    {id:"fx_a_30",cat:"FX",q:"A",res:"",fps:30,spw:5.2,hc:1},
+    {id:"fx_b_24",cat:"FX",q:"B",res:"",fps:24,spw:9,  hc:1},
+    {id:"fx_b_30",cat:"FX",q:"B",res:"",fps:30,spw:7.9,hc:1},
+    {id:"co_s_fhd_24",cat:"합성",q:"S",res:"FHD",fps:24,spw:4,  hc:1},
+    {id:"co_s_fhd_30",cat:"합성",q:"S",res:"FHD",fps:30,spw:3,  hc:1},
+    {id:"co_s_4k_24", cat:"합성",q:"S",res:"4K", fps:24,spw:3,  hc:1},
+    {id:"co_s_4k_30", cat:"합성",q:"S",res:"4K", fps:30,spw:2,  hc:1},
+    {id:"co_a_fhd_24",cat:"합성",q:"A",res:"FHD",fps:24,spw:6,  hc:1},
+    {id:"co_a_fhd_30",cat:"합성",q:"A",res:"FHD",fps:30,spw:4,  hc:1},
+    {id:"co_a_4k_24", cat:"합성",q:"A",res:"4K", fps:24,spw:5,  hc:1},
+    {id:"co_a_4k_30", cat:"합성",q:"A",res:"4K", fps:30,spw:3,  hc:1},
+    {id:"co_b_fhd_24",cat:"합성",q:"B",res:"FHD",fps:24,spw:9,  hc:1},
+    {id:"co_b_fhd_30",cat:"합성",q:"B",res:"FHD",fps:30,spw:7,  hc:1},
+    {id:"co_b_4k_24", cat:"합성",q:"B",res:"4K", fps:24,spw:7,  hc:1},
+    {id:"co_b_4k_30", cat:"합성",q:"B",res:"4K", fps:30,spw:5,  hc:1},
   ]
 };
 
@@ -1120,69 +1126,132 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const props = Number(project.propCount) || 0;
   const bgs   = Number(project.bgCount)   || 0;
   const start = projectStartDate || new Date().toISOString().slice(0,10);
+  const deadline = project.deadline || null;
 
-  const assetDays = (cat, item, qual, resolution) =>
-    (standards.asset.find(s=>s.cat===cat&&s.item===item&&s.q===qual&&(!resolution||s.res===resolution))?.days) || 0;
-  const prodSpw = (cat, qual, fpsVal, resolution) =>
-    (standards.production.find(s=>s.cat===cat&&s.q===qual&&s.fps===fpsVal&&(!resolution||s.res===resolution))?.spw) || 1;
+  if (totalSecs === 0 && chars === 0 && props === 0 && bgs === 0) {
+    return {phases:[], headcounts:{}};
+  }
 
-  const modelTotal  = chars*assetDays("모델링","캐릭터 1종",q)+props*assetDays("모델링","프랍 1종",q)+bgs*assetDays("모델링","배경 1종",q);
-  const lookDevTotal= chars*assetDays("룩댑","캐릭터 1종",q,res)+bgs*assetDays("룩댑","배경 1종",q,res);
-  const riggingTotal= chars*assetDays("리깅","캐릭터 1종",q)+props*assetDays("리깅","프랍 1종",q);
+  const fa = (cat, item, qual, resolution) =>
+    standards.asset.find(s=>s.cat===cat&&s.item===item&&s.q===qual&&(!resolution||s.res===resolution));
+  const fp = (cat, qual, fpsVal, resolution) =>
+    standards.production.find(s=>s.cat===cat&&s.q===qual&&s.fps===fpsVal&&(!resolution||s.res===resolution));
 
-  const animDays  = totalSecs>0 ? Math.ceil((totalSecs/prodSpw("애니메이션",q,fps))*7) : 0;
-  const lrDays    = totalSecs>0 ? Math.ceil((totalSecs/prodSpw("라이팅&렌더",q,fps,res))*7) : 0;
-  const fxDays    = totalSecs>0 ? Math.ceil((totalSecs/prodSpw("FX",q,fps))*7) : 0;
-  const compDays  = totalSecs>0 ? Math.ceil((totalSecs/prodSpw("합성",q,fps,res))*7) : 0;
+  // Base work volume (person-days for assets, person-days for production)
+  const modelWork = chars*(fa("모델링","캐릭터 1종",q)?.days||0)
+                  + props*(fa("모델링","프랍 1종",q)?.days||0)
+                  + bgs*(fa("모델링","배경 1종",q)?.days||0);
+  const ldWork    = chars*(fa("룩댑","캐릭터 1종",q,res)?.days||0)
+                  + bgs*(fa("룩댑","배경 1종",q,res)?.days||0);
+  const rigWork   = chars*(fa("리깅","캐릭터 1종",q)?.days||0)
+                  + props*(fa("리깅","프랍 1종",q)?.days||0);
 
-  const headOf = (total, stdDays) => Math.max(1, Math.ceil(total / Math.max(stdDays,1)));
-  const modelHC  = headOf(modelTotal, 60);
-  const lookHC   = headOf(lookDevTotal, 60);
-  const rigHC    = headOf(riggingTotal, 30);
-  const animHC   = headOf(animDays, 90);
-  const lrHC     = headOf(lrDays, 60);
-  const fxHC     = headOf(fxDays, 60);
-  const compHC   = headOf(compDays, 60);
+  const anSpw  = fp("애니메이션",q,fps)?.spw  || 1;
+  const lrSpw  = fp("라이팅&렌더",q,fps,res)?.spw || 1;
+  const fxSpw  = fp("FX",q,fps)?.spw          || 1;
+  const coSpw  = fp("합성",q,fps,res)?.spw    || 1;
 
-  const phaseDays = {
-    model:   modelTotal>0  ? Math.ceil(modelTotal/modelHC)   : 0,
-    lookDev: lookDevTotal>0? Math.ceil(lookDevTotal/lookHC)  : 0,
-    rigging: riggingTotal>0? Math.ceil(riggingTotal/rigHC)   : 0,
-    anim:    animDays,
-    lr:      lrDays,
-    fx:      fxDays,
-    comp:    compDays,
-  };
-  const headcounts = {model:modelHC,lookDev:lookHC,rigging:rigHC,anim:animHC,lr:lrHC,fx:fxHC,comp:compHC};
+  // Base headcounts from standards (hc field)
+  const modelHC0 = fa("모델링","캐릭터 1종",q)?.hc || 1;
+  const ldHC0    = fa("룩댑","캐릭터 1종",q,res)?.hc || 1;
+  const rigHC0   = fa("리깅","캐릭터 1종",q)?.hc || 1;
+  const anHC0    = fp("애니메이션",q,fps)?.hc  || 1;
+  const lrHC0    = fp("라이팅&렌더",q,fps,res)?.hc || 1;
+  const fxHC0    = fp("FX",q,fps)?.hc          || 1;
+  const coHC0    = fp("합성",q,fps,res)?.hc    || 1;
+
+  // Base durations: work / headcount
+  const modelDays0 = modelWork>0 ? Math.ceil(modelWork/modelHC0) : 0;
+  const ldDays0    = ldWork>0    ? Math.ceil(ldWork/ldHC0)       : 0;
+  const rigDays0   = rigWork>0   ? Math.ceil(rigWork/rigHC0)     : 0;
+  const anDays0    = totalSecs>0 ? Math.ceil((totalSecs/anSpw)*7/anHC0) : 0;
+  const lrDays0    = totalSecs>0 ? Math.ceil((totalSecs/lrSpw)*7/lrHC0) : 0;
+  const fxDays0    = totalSecs>0 ? Math.ceil((totalSecs/fxSpw)*7/fxHC0) : 0;
+  const coDays0    = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0) : 0;
+
+  // Preprod: design + storyboard in parallel (estimate ~25% of modeling, min 10 days)
+  const prepDays0 = Math.max(10, Math.round(modelDays0 * 0.25));
+
+  // Critical path: preprod → modeling → max(rigging ∥ lookdev) → animation → max(lr ∥ fx) → composition
+  const parallelRigLd0 = Math.max(rigDays0, ldDays0);
+  const parallelLrFx0  = Math.max(lrDays0, fxDays0);
+  const critical0 = prepDays0 + modelDays0 + parallelRigLd0 + anDays0 + parallelLrFx0 + coDays0;
+
+  // Scale to fit within deadline
+  let scale = 1;
+  if (deadline && critical0 > 0) {
+    const availDays = daysBetween(start, deadline);
+    if (availDays > 0 && critical0 > availDays) scale = critical0 / availDays;
+  }
+
+  const sd = d => d>0 ? Math.max(1, Math.floor(d/scale)) : 0;
+  const sh = h => Math.ceil(h*scale);
+
+  const prepDays  = sd(prepDays0);
+  const modelDays = sd(modelDays0);
+  const ldDays    = sd(ldDays0);
+  const rigDays   = sd(rigDays0);
+  const anDays    = sd(anDays0);
+  const lrDays    = sd(lrDays0);
+  const fxDays    = sd(fxDays0);
+  const coDays    = sd(coDays0);
+  const modelHC   = sh(modelHC0);
+  const ldHC      = sh(ldHC0);
+  const rigHC     = sh(rigHC0);
+  const anHC      = sh(anHC0);
+  const lrHC      = sh(lrHC0);
+  const fxHC      = sh(fxHC0);
+  const coHC      = sh(coHC0);
+
+  const parallelRigLd = Math.max(rigDays, ldDays);
+  const parallelLrFx  = Math.max(lrDays, fxDays);
+  const totalDur = prepDays + modelDays + parallelRigLd + anDays + parallelLrFx + coDays;
+  const projEnd  = deadline || addDays(start, totalDur);
+
+  const mk = (phaseId, s, e, hc) => ({id:Date.now()+Math.random(),phaseId,startDate:s,endDate:e,assignee:`${hc}명`});
 
   const phases = [];
-  let cur = start;
-  const push = (phaseId, days, hc) => {
-    if (days<=0) return;
-    const end = addDays(cur, days);
-    phases.push({id:Date.now()+Math.random(),phaseId,startDate:cur,endDate:end,assignee:`${hc}명`});
-    cur = end;
-  };
+  if (totalDur > 0) {
+    // Management: full span
+    phases.push(mk("pd",         start, projEnd, 1));
+    phases.push(mk("director",   start, projEnd, 1));
+    phases.push(mk("supervisor", start, projEnd, 1));
+  }
 
-  const prepDays = Math.max(14, Math.round(phaseDays.model*0.25));
-  push("pd",        Object.values(phaseDays).reduce((a,b)=>a+b,0)+prepDays*2, 1);
-  cur = start;
-  push("director",  Object.values(phaseDays).reduce((a,b)=>a+b,0)+prepDays*2, 1);
-  cur = start;
-  push("supervisor",Object.values(phaseDays).reduce((a,b)=>a+b,0)+prepDays*2, 1);
-  cur = start;
-  push("design",          prepDays, 1);
-  cur = start;
-  push("storyboard_reel", prepDays, 1);
-  cur = addDays(start, prepDays);
-  push("modeling",        phaseDays.model,   headcounts.model);
-  push("texture_shading", phaseDays.lookDev, headcounts.lookDev);
-  push("rigging",         phaseDays.rigging, headcounts.rigging);
-  push("animation_main",  phaseDays.anim,    headcounts.anim);
-  push("lighting_render", phaseDays.lr,      headcounts.lr);
-  push("fx",              phaseDays.fx,      headcounts.fx);
-  push("composition",     phaseDays.comp,    headcounts.comp);
+  // Preprod: design & storyboard in parallel
+  const prepEnd = addDays(start, prepDays);
+  if (prepDays > 0) {
+    phases.push(mk("design",         start,   prepEnd, 1));
+    phases.push(mk("storyboard_reel",start,   prepEnd, 1));
+  }
 
+  // Modeling
+  const modelEnd = addDays(prepEnd, modelDays);
+  if (modelDays > 0) phases.push(mk("modeling", prepEnd, modelEnd, modelHC));
+
+  // Rigging ∥ LookDev (both start after modeling)
+  const rigEnd = addDays(modelEnd, rigDays);
+  const ldEnd  = addDays(modelEnd, ldDays);
+  if (rigDays > 0) phases.push(mk("rigging",         modelEnd, rigEnd, rigHC));
+  if (ldDays  > 0) phases.push(mk("texture_shading", modelEnd, ldEnd,  ldHC));
+
+  // Animation (after max of rigging/lookdev)
+  const anStart = addDays(modelEnd, parallelRigLd);
+  const anEnd   = addDays(anStart, anDays);
+  if (anDays > 0) phases.push(mk("animation_main", anStart, anEnd, anHC));
+
+  // LR ∥ FX (both start after animation)
+  const lrEnd = addDays(anEnd, lrDays);
+  const fxEnd = addDays(anEnd, fxDays);
+  if (lrDays > 0) phases.push(mk("lighting_render", anEnd, lrEnd, lrHC));
+  if (fxDays > 0) phases.push(mk("fx",              anEnd, fxEnd, fxHC));
+
+  // Composition (after max of lr/fx)
+  const coStart = addDays(anEnd, parallelLrFx);
+  const coEnd   = addDays(coStart, coDays);
+  if (coDays > 0) phases.push(mk("composition", coStart, coEnd, coHC));
+
+  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,comp:coHC};
   return {phases, headcounts};
 }
 
