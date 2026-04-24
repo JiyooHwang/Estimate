@@ -404,10 +404,29 @@ function ProjectInfoTab({project, onChange}) {
             })}
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
-          <FInput label="캐릭터 수" type="number" min="0" value={project.charCount} onChange={e=>onChange("charCount",e.target.value)} placeholder="1" />
-          <FInput label="프랍 수"   type="number" min="0" value={project.propCount} onChange={e=>onChange("propCount",e.target.value)} placeholder="0" />
-          <FInput label="배경 수"   type="number" min="0" value={project.bgCount}   onChange={e=>onChange("bgCount",e.target.value)} placeholder="1" />
+        {/* 에셋 난이도별 수량 */}
+        <div style={{marginTop:4}}>
+          <div style={{display:"grid",gridTemplateColumns:"72px 1fr 1fr 1fr",gap:6,marginBottom:6,paddingBottom:4,borderBottom:"1px solid #E5E7EB"}}>
+            <span />
+            {["S","A","B"].map(g=>{
+              const c={S:"#C8102E",A:"#F59E0B",B:"#34D399"}[g];
+              return <span key={g} style={{fontSize:11,fontWeight:800,color:c,textAlign:"center"}}>{g} 등급</span>;
+            })}
+          </div>
+          {[
+            {label:"캐릭터", keys:["charS","charA","charB"]},
+            {label:"프랍",   keys:["propS","propA","propB"]},
+            {label:"배경",   keys:["bgS",  "bgA",  "bgB"  ]},
+          ].map(({label,keys})=>(
+            <div key={label} style={{display:"grid",gridTemplateColumns:"72px 1fr 1fr 1fr",gap:6,marginBottom:6,alignItems:"center"}}>
+              <span style={{fontSize:12,fontWeight:700,color:"#374151"}}>{label}</span>
+              {keys.map(k=>(
+                <input key={k} type="number" min="0" value={project[k]??0}
+                  onChange={e=>onChange(k,e.target.value)}
+                  style={{background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:8,padding:"7px 10px",color:"#1A1A2E",fontSize:14,outline:"none",textAlign:"center",width:"100%"}} />
+              ))}
+            </div>
+          ))}
         </div>
         <div style={{marginTop:12,fontSize:11,color:"#9CA3AF"}}>※ 기준표 탭의 데이터를 바탕으로 스케줄 탭에서 자동 계산합니다</div>
       </Card>
@@ -1130,7 +1149,7 @@ function SummaryTab({project, schedule, quote}) {
 
 
 /* ── 메인 앱 (로그인 없음) ───────────────────────────────────────────── */
-const DEFAULT_PROJECT = {name:"",client:"",manager:"",startDate:"",deadline:"",videoType:"",description:"",duration:"",resolution:"1920x1080",format:"mp4_h264",revisions:"3",music:"",subtitle:"",fps:"24",qualityGrade:"A",charCount:"1",propCount:"0",bgCount:"1"};
+const DEFAULT_PROJECT = {name:"",client:"",manager:"",startDate:"",deadline:"",videoType:"",description:"",duration:"",resolution:"1920x1080",format:"mp4_h264",revisions:"3",music:"",subtitle:"",fps:"24",qualityGrade:"A",charS:"0",charA:"1",charB:"0",propS:"0",propA:"0",propB:"0",bgS:"0",bgA:"1",bgB:"0"};
 const DEFAULT_SCHEDULE = {phases:[],note:""};
 const DEFAULT_QUOTE    = {items:[],discountPct:0,includeVat:true};
 
@@ -1316,13 +1335,15 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const fps = Number(project.fps) || 24;
   const res = (project.resolution||"").includes("3840") ? "4K" : "FHD";
   const totalSecs = Number(project.duration) || 0;
-  const chars = Number(project.charCount) || 0;
-  const props = Number(project.propCount) || 0;
-  const bgs   = Number(project.bgCount)   || 0;
+  // Per-difficulty asset counts
+  const charS = Number(project.charS)||0; const charA = Number(project.charA)||0; const charB = Number(project.charB)||0;
+  const propS = Number(project.propS)||0; const propA = Number(project.propA)||0; const propB = Number(project.propB)||0;
+  const bgS   = Number(project.bgS)  ||0; const bgA   = Number(project.bgA)  ||0; const bgB   = Number(project.bgB)  ||0;
+  const totalAssets = charS+charA+charB+propS+propA+propB+bgS+bgA+bgB;
   const start = projectStartDate || new Date().toISOString().slice(0,10);
   const deadline = project.deadline || null;
 
-  if (totalSecs === 0 && chars === 0 && props === 0 && bgs === 0) {
+  if (totalSecs === 0 && totalAssets === 0) {
     return {phases:[], headcounts:{}};
   }
 
@@ -1331,14 +1352,14 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const fp = (cat, qual, fpsVal, resolution) =>
     standards.production.find(s=>s.cat===cat&&s.q===qual&&s.fps===fpsVal&&(!resolution||s.res===resolution));
 
-  // Base work volume (person-days for assets, person-days for production)
-  const modelWork = chars*(fa("모델링","캐릭터 1종",q)?.days||0)
-                  + props*(fa("모델링","프랍 1종",q)?.days||0)
-                  + bgs*(fa("모델링","배경 1종",q)?.days||0);
-  const ldWork    = chars*(fa("룩댑","캐릭터 1종",q,res)?.days||0)
-                  + bgs*(fa("룩댑","배경 1종",q,res)?.days||0);
-  const rigWork   = chars*(fa("리깅","캐릭터 1종",q)?.days||0)
-                  + props*(fa("리깅","프랍 1종",q)?.days||0);
+  // Base work volume summed across all difficulty levels
+  const modelWork = charS*(fa("모델링","캐릭터 1종","S")?.days||0) + charA*(fa("모델링","캐릭터 1종","A")?.days||0) + charB*(fa("모델링","캐릭터 1종","B")?.days||0)
+                  + propS*(fa("모델링","프랍 1종","S")?.days||0)   + propA*(fa("모델링","프랍 1종","A")?.days||0)   + propB*(fa("모델링","프랍 1종","B")?.days||0)
+                  + bgS*(fa("모델링","배경 1종","S")?.days||0)     + bgA*(fa("모델링","배경 1종","A")?.days||0)     + bgB*(fa("모델링","배경 1종","B")?.days||0);
+  const ldWork    = charS*(fa("룩댑","캐릭터 1종","S",res)?.days||0) + charA*(fa("룩댑","캐릭터 1종","A",res)?.days||0) + charB*(fa("룩댑","캐릭터 1종","B",res)?.days||0)
+                  + bgS*(fa("룩댑","배경 1종","S",res)?.days||0)     + bgA*(fa("룩댑","배경 1종","A",res)?.days||0)     + bgB*(fa("룩댑","배경 1종","B",res)?.days||0);
+  const rigWork   = charS*(fa("리깅","캐릭터 1종","S")?.days||0) + charA*(fa("리깅","캐릭터 1종","A")?.days||0) + charB*(fa("리깅","캐릭터 1종","B")?.days||0)
+                  + propS*(fa("리깅","프랍 1종","S")?.days||0)   + propA*(fa("리깅","프랍 1종","A")?.days||0)   + propB*(fa("리깅","프랍 1종","B")?.days||0);
 
   const anSpw  = fp("애니메이션",q,fps)?.spw     || 1;
   const lrSpw  = fp("라이팅&렌더",q,fps,res)?.spw || 1;
@@ -1368,9 +1389,9 @@ function calcAutoSchedule(project, standards, projectStartDate) {
 
   // Preprod: use preproduction standards if available, else estimate ~25% of modeling
   const fpd = (cat, item, qual) => (standards.preproduction||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual);
-  const designWork = chars*(fpd("디자인","캐릭터 1종",q)?.days||0)
-                   + props*(fpd("디자인","프랍 1종",q)?.days||0)
-                   + bgs*(fpd("디자인","배경 1종",q)?.days||0);
+  const designWork = charS*(fpd("디자인","캐릭터 1종","S")?.days||0) + charA*(fpd("디자인","캐릭터 1종","A")?.days||0) + charB*(fpd("디자인","캐릭터 1종","B")?.days||0)
+                   + propS*(fpd("디자인","프랍 1종","S")?.days||0)   + propA*(fpd("디자인","프랍 1종","A")?.days||0)   + propB*(fpd("디자인","프랍 1종","B")?.days||0)
+                   + bgS*(fpd("디자인","배경 1종","S")?.days||0)     + bgA*(fpd("디자인","배경 1종","A")?.days||0)     + bgB*(fpd("디자인","배경 1종","B")?.days||0);
   const designHC0  = fpd("디자인","캐릭터 1종",q)?.hc || 1;
   const designDays0 = designWork > 0 ? Math.ceil(designWork/designHC0) : 0;
   const totalMins   = totalSecs / 60;
