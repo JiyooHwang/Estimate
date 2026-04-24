@@ -98,7 +98,7 @@ const PHASE_ROLE_MAP = {
   edit:"editor", color_grading:"colorist", sound_post:"sound"
 };
 
-const VIDEO_TYPES = ["광고/상업 영상","유튜브/SNS 콘텐츠","Game Cinematic","모션그래픽","2D 애니메이션","3D 애니메이션"];
+const VIDEO_TYPES = ["Game Cinematic","3D 애니메이션"];
 const formatNum = n => new Intl.NumberFormat("ko-KR").format(n);
 const DAY_MS = 86400000;
 
@@ -526,7 +526,7 @@ function GanttChart({phases, ganttStart, ganttEnd, onUpdate}) {
 }
 
 /* ── 스케줄 탭 ────────────────────────────────────────────────────────── */
-function ScheduleTab({schedule, onChange, project, standards, projectStart, ganttStart, setGanttStart, ganttEnd, setGanttEnd, onAutoCalc}) {
+function ScheduleTab({schedule, onChange, project, projectStart, ganttStart, setGanttStart, ganttEnd, setGanttEnd, onAutoCalc}) {
 
   const updatePhase     = (id,f,v) => onChange("phases", schedule.phases.map(p=>p.id===id?{...p,[f]:v}:p));
   const updatePhaseDates = (id,s,e) => onChange("phases", schedule.phases.map(p=>p.id===id?{...p,startDate:s,endDate:e}:p));
@@ -814,95 +814,146 @@ function QuoteTab({quote, onChange, userCanEditRate}) {
 }
 
 /* ── 기준표 탭 ────────────────────────────────────────────────────────── */
-function StandardsTab({standards, onChange}) {
-  const updateAsset = (id,field,val) => onChange({...standards, asset: standards.asset.map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
-  const updateProd  = (id,field,val) => onChange({...standards, production: standards.production.map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
+function StandardsTab({allStandards, onChange}) {
+  const [activeStd, setActiveStd] = React.useState("cinematic");
+  const standards = allStandards[activeStd] || allStandards.cinematic;
+  const updateStd = newStd => onChange({...allStandards, [activeStd]: newStd});
+
+  const updatePP   = (id,field,val) => updateStd({...standards, preproduction: (standards.preproduction||[]).map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
+  const updateAsset= (id,field,val) => updateStd({...standards, asset: standards.asset.map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
+  const updateProd = (id,field,val) => updateStd({...standards, production: standards.production.map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
+
+  const resetStd = () => {
+    if (!window.confirm("현재 기준표를 기본값으로 초기화하시겠습니까?")) return;
+    const def = activeStd==="animation" ? DEFAULT_STANDARDS_ANIMATION : DEFAULT_STANDARDS_CINEMATIC;
+    onChange({...allStandards, [activeStd]: def});
+  };
 
   const assetCats = ["모델링","룩댑","리깅"];
   const prodCats  = ["애니메이션","라이팅&렌더","FX","합성","시뮬레이션"];
   const qColor    = {S:"#C8102E",A:"#F59E0B",B:"#34D399"};
-  const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:6,padding:"4px 8px",color:"#1A1A2E",fontSize:12,outline:"none",textAlign:"right",width:70};
-  const th = {padding:"8px 12px",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"2px solid #E5E7EB",background:"#F4F5F7",whiteSpace:"nowrap"};
+  const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:6,padding:"4px 6px",color:"#1A1A2E",fontSize:12,outline:"none",textAlign:"right",width:65};
+  const inSS= {...inS,width:48};
+  const th  = {padding:"6px 8px",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"2px solid #E5E7EB",background:"#F4F5F7",whiteSpace:"nowrap"};
+  const td0 = {padding:"5px 8px",borderBottom:"1px solid #F3F4F6",fontSize:11};
+
+  const StdTable = ({cols, rows, renderRow}) => (
+    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+      <thead><tr>{cols.map((h,i)=><th key={i} style={{...th,textAlign:i>0?"center":"left"}}>{h}</th>)}</tr></thead>
+      <tbody>{rows.map((s,ri)=><tr key={s.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>{renderRow(s)}</tr>)}</tbody>
+    </table>
+  );
+
+  const QBadge = ({q}) => <span style={{background:qColor[q]+"22",color:qColor[q],fontWeight:700,padding:"1px 6px",borderRadius:4,fontSize:11}}>{q}</span>;
+
+  const ppRows = standards.preproduction || [];
+  const ppDesign = ppRows.filter(s=>s.cat==="디자인");
+  const ppSB     = ppRows.filter(s=>s.cat==="스토리보드/릴");
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      {/* 탭 선택 */}
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        {[{key:"cinematic",label:"📋 견적기준표 for Game Cinematic"},{key:"animation",label:"📋 견적기준표 for 3D 애니메이션"}].map(t=>(
+          <button key={t.key} onClick={()=>setActiveStd(t.key)}
+            style={{padding:"9px 18px",borderRadius:9,border:`2px solid ${activeStd===t.key?"#C8102E":"#E5E7EB"}`,cursor:"pointer",fontSize:12,fontWeight:700,
+              background:activeStd===t.key?"#C8102E":"#fff",color:activeStd===t.key?"#fff":"#374151",transition:"all 0.2s"}}>
+            {t.label}
+          </button>
+        ))}
+        <button onClick={resetStd} style={{marginLeft:"auto",padding:"7px 14px",borderRadius:8,border:"1px solid #E5E7EB",background:"#F8F9FA",color:"#9CA3AF",fontSize:11,cursor:"pointer",fontWeight:600}}>
+          기본값 초기화
+        </button>
+        <span style={{fontSize:11,color:"#34D399",fontWeight:600}}>✓ 자동 저장</span>
+      </div>
+
+      {/* PreProduction */}
+      {ppRows.length > 0 && (
+        <Card>
+          <h3 style={{margin:"0 0 4px",color:"#A78BFA",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>🎨 Pre Production 기준</h3>
+          <p style={{fontSize:11,color:"#9CA3AF",marginBottom:14}}>디자인·스토리보드 — 에셋 1종(또는 분) 당 작업 기간(일)</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            {/* 디자인 */}
+            <div>
+              <div style={{fontSize:12,fontWeight:800,color:"#374151",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E5E7EB"}}>디자인</div>
+              <StdTable
+                cols={["분량","등급","인원","기간(일)"]}
+                rows={ppDesign}
+                renderRow={s=>[
+                  <td key="item" style={{...td0,color:"#374151"}}>{s.item}</td>,
+                  <td key="q" style={{...td0,textAlign:"center"}}><QBadge q={s.q} /></td>,
+                  <td key="hc" style={{...td0,textAlign:"right"}}><input type="number" min="1" value={s.hc??1} onChange={e=>updatePP(s.id,"hc",e.target.value)} style={inSS}/></td>,
+                  <td key="days" style={{...td0,textAlign:"right"}}><input type="number" min="0.1" step="0.25" value={s.days} onChange={e=>updatePP(s.id,"days",e.target.value)} style={inS}/></td>,
+                ]}
+              />
+            </div>
+            {/* 스토리보드/릴 */}
+            <div>
+              <div style={{fontSize:12,fontWeight:800,color:"#374151",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E5E7EB"}}>스토리보드/릴</div>
+              <StdTable
+                cols={["분량","등급","인원","기간(일)"]}
+                rows={ppSB}
+                renderRow={s=>[
+                  <td key="item" style={{...td0,color:"#374151"}}>{s.item}</td>,
+                  <td key="q" style={{...td0,textAlign:"center"}}><QBadge q={s.q} /></td>,
+                  <td key="hc" style={{...td0,textAlign:"right"}}><input type="number" min="1" value={s.hc??1} onChange={e=>updatePP(s.id,"hc",e.target.value)} style={inSS}/></td>,
+                  <td key="days" style={{...td0,textAlign:"right"}}><input type="number" min="0.1" step="0.25" value={s.days} onChange={e=>updatePP(s.id,"days",e.target.value)} style={inS}/></td>,
+                ]}
+              />
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* 에셋 기준 */}
       <Card>
-        <h3 style={{margin:"0 0 4px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>📋 에셋 제작 기준</h3>
-        <p style={{fontSize:11,color:"#9CA3AF",marginBottom:16}}>모델링·룩댑·리깅 — 에셋 1종당 작업 기간(일). 값을 직접 수정할 수 있습니다.</p>
+        <h3 style={{margin:"0 0 4px",color:"#34D399",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>🏗 에셋 제작 기준</h3>
+        <p style={{fontSize:11,color:"#9CA3AF",marginBottom:14}}>모델링·룩댑·리깅 — 에셋 1종당 작업 기간(일, 인원 1명 기준)</p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
           {assetCats.map(cat=>{
             const rows = standards.asset.filter(s=>s.cat===cat);
             return (
               <div key={cat}>
                 <div style={{fontSize:12,fontWeight:800,color:"#374151",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E5E7EB"}}>{cat}</div>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead>
-                    <tr>
-                      {["분량","등급",cat==="룩댑"?"해상도":"","인원","기간(일)"].filter(Boolean).map((h,i)=>(
-                        <th key={i} style={{...th,textAlign:i>0?"center":"left",padding:"6px 8px"}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((s,ri)=>(
-                      <tr key={s.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>
-                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",color:"#374151",fontSize:11}}>{s.item}</td>
-                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"center"}}>
-                          <span style={{background:qColor[s.q]+"22",color:qColor[s.q],fontWeight:700,padding:"1px 6px",borderRadius:4,fontSize:11}}>{s.q}</span>
-                        </td>
-                        {cat==="룩댑" && <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"center",fontSize:11,color:"#6B7280"}}>{s.res}</td>}
-                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"right"}}>
-                          <input type="number" min="1" value={s.hc??1} onChange={e=>updateAsset(s.id,"hc",e.target.value)} style={{...inS,width:50}} />
-                        </td>
-                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"right"}}>
-                          <input type="number" min="1" value={s.days} onChange={e=>updateAsset(s.id,"days",e.target.value)} style={inS} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <StdTable
+                  cols={["분량","등급",cat==="룩댑"?"해상도":"","인원","기간(일)"].filter(Boolean)}
+                  rows={rows}
+                  renderRow={s=>[
+                    <td key="item" style={{...td0,color:"#374151"}}>{s.item}</td>,
+                    <td key="q" style={{...td0,textAlign:"center"}}><QBadge q={s.q}/></td>,
+                    cat==="룩댑" && <td key="res" style={{...td0,textAlign:"center",color:"#6B7280"}}>{s.res}</td>,
+                    <td key="hc" style={{...td0,textAlign:"right"}}><input type="number" min="1" value={s.hc??1} onChange={e=>updateAsset(s.id,"hc",e.target.value)} style={inSS}/></td>,
+                    <td key="days" style={{...td0,textAlign:"right"}}><input type="number" min="0.1" step="0.25" value={s.days} onChange={e=>updateAsset(s.id,"days",e.target.value)} style={inS}/></td>,
+                  ].filter(Boolean)}
+                />
               </div>
             );
           })}
         </div>
       </Card>
 
+      {/* 프레임 기준 */}
       <Card>
-        <h3 style={{margin:"0 0 4px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>📋 프레임 작업 기준</h3>
-        <p style={{fontSize:11,color:"#9CA3AF",marginBottom:16}}>애니메이션·라이팅&렌더·FX·합성 — 1인이 1주일에 처리 가능한 초(秒). 값을 직접 수정할 수 있습니다.</p>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:16}}>
+        <h3 style={{margin:"0 0 4px",color:"#F59E0B",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>🎬 프레임 작업 기준</h3>
+        <p style={{fontSize:11,color:"#9CA3AF",marginBottom:14}}>애니메이션·LR·FX·합성·시뮬레이션 — 1인이 1주에 처리 가능한 초(秒)</p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
           {prodCats.map(cat=>{
             const rows = standards.production.filter(s=>s.cat===cat);
             const hasRes = rows.some(s=>s.res);
             return (
               <div key={cat}>
                 <div style={{fontSize:12,fontWeight:800,color:"#374151",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E5E7EB"}}>{cat}</div>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead>
-                    <tr>
-                      {["등급",hasRes?"해상도":"","FPS","인원","초/주(1인)"].filter(Boolean).map((h,i)=>(
-                        <th key={i} style={{...th,textAlign:i>0?"center":"left",padding:"6px 8px"}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((s,ri)=>(
-                      <tr key={s.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>
-                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"center"}}>
-                          <span style={{background:qColor[s.q]+"22",color:qColor[s.q],fontWeight:700,padding:"1px 6px",borderRadius:4,fontSize:11}}>{s.q}</span>
-                        </td>
-                        {hasRes && <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"center",fontSize:11,color:"#6B7280"}}>{s.res||"-"}</td>}
-                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"center",fontSize:11,color:"#6B7280"}}>{s.fps} fps</td>
-                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"right"}}>
-                          <input type="number" min="1" value={s.hc??1} onChange={e=>updateProd(s.id,"hc",e.target.value)} style={{...inS,width:50}} />
-                        </td>
-                        <td style={{padding:"5px 8px",borderBottom:"1px solid #F3F4F6",textAlign:"right"}}>
-                          <input type="number" min="0.1" step="0.1" value={s.spw} onChange={e=>updateProd(s.id,"spw",e.target.value)} style={inS} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <StdTable
+                  cols={["등급",hasRes?"해상도":"","FPS","인원","초/주"].filter(Boolean)}
+                  rows={rows}
+                  renderRow={s=>[
+                    <td key="q" style={{...td0,textAlign:"center"}}><QBadge q={s.q}/></td>,
+                    hasRes && <td key="res" style={{...td0,textAlign:"center",color:"#6B7280"}}>{s.res||"-"}</td>,
+                    <td key="fps" style={{...td0,textAlign:"center",color:"#6B7280"}}>{s.fps}</td>,
+                    <td key="hc" style={{...td0,textAlign:"right"}}><input type="number" min="1" value={s.hc??1} onChange={e=>updateProd(s.id,"hc",e.target.value)} style={inSS}/></td>,
+                    <td key="spw" style={{...td0,textAlign:"right"}}><input type="number" min="0.1" step="0.01" value={s.spw} onChange={e=>updateProd(s.id,"spw",e.target.value)} style={inS}/></td>,
+                  ].filter(Boolean)}
+                />
               </div>
             );
           })}
@@ -1051,7 +1102,18 @@ const DEFAULT_SCHEDULE = {phases:[],note:""};
 const DEFAULT_QUOTE    = {items:[],discountPct:0,includeVat:true};
 
 /* ── 기준표 기본값 ──────────────────────────────────────────────────────── */
-const DEFAULT_STANDARDS = {
+const _mkAsset = (pfx,cat,item,q,res,days) => ({id:`${pfx}_${q.toLowerCase()}${res?"_"+res.toLowerCase():""}`,cat,item,q,res,days,hc:1});
+const _mkProd  = (pfx,cat,q,res,fps,spw) => ({id:`${pfx}_${q.toLowerCase()}${res?"_"+res.toLowerCase():""}${fps?`_${fps}`:""}`,cat,q,res,fps,spw,hc:1});
+const _mkPP    = (id,cat,item,q,days) => ({id,cat,item,q,res:"",days,hc:1});
+
+/* ── Game Cinematic ── */
+const DEFAULT_STANDARDS_CINEMATIC = {
+  preproduction:[
+    _mkPP("pp_d_c_s","디자인","캐릭터 1종","S",20), _mkPP("pp_d_c_a","디자인","캐릭터 1종","A",15), _mkPP("pp_d_c_b","디자인","캐릭터 1종","B",10),
+    _mkPP("pp_d_p_s","디자인","프랍 1종",  "S",10), _mkPP("pp_d_p_a","디자인","프랍 1종",  "A",5),  _mkPP("pp_d_p_b","디자인","프랍 1종",  "B",2),
+    _mkPP("pp_d_b_s","디자인","배경 1종",  "S",40), _mkPP("pp_d_b_a","디자인","배경 1종",  "A",30), _mkPP("pp_d_b_b","디자인","배경 1종",  "B",20),
+    _mkPP("pp_sb_s", "스토리보드/릴","1분","S",7),
+  ],
   asset:[
     {id:"m_c_s",cat:"모델링",item:"캐릭터 1종",q:"S",res:"",days:20,hc:1},
     {id:"m_c_a",cat:"모델링",item:"캐릭터 1종",q:"A",res:"",days:15,hc:1},
@@ -1127,6 +1189,94 @@ const DEFAULT_STANDARDS = {
   ]
 };
 
+/* ── 3D 애니메이션 (values = Game Cinematic × 0.75) ── */
+const DEFAULT_STANDARDS_ANIMATION = {
+  preproduction:[
+    _mkPP("pp_d_c_s","디자인","캐릭터 1종","S",15), _mkPP("pp_d_c_a","디자인","캐릭터 1종","A",11.25), _mkPP("pp_d_c_b","디자인","캐릭터 1종","B",7.5),
+    _mkPP("pp_d_p_s","디자인","프랍 1종",  "S",7.5), _mkPP("pp_d_p_a","디자인","프랍 1종",  "A",3.75),  _mkPP("pp_d_p_b","디자인","프랍 1종",  "B",1.5),
+    _mkPP("pp_d_b_s","디자인","배경 1종",  "S",30), _mkPP("pp_d_b_a","디자인","배경 1종",  "A",22.5), _mkPP("pp_d_b_b","디자인","배경 1종",  "B",15),
+    _mkPP("pp_sb_s", "스토리보드/릴","1분","S",1.5), _mkPP("pp_sb_a","스토리보드/릴","1분","A",1), _mkPP("pp_sb_b","스토리보드/릴","1분","B",0.5),
+  ],
+  asset:[
+    {id:"m_c_s",cat:"모델링",item:"캐릭터 1종",q:"S",res:"",days:15,   hc:1},
+    {id:"m_c_a",cat:"모델링",item:"캐릭터 1종",q:"A",res:"",days:11.25,hc:1},
+    {id:"m_c_b",cat:"모델링",item:"캐릭터 1종",q:"B",res:"",days:7.5,  hc:1},
+    {id:"m_p_s",cat:"모델링",item:"프랍 1종",  q:"S",res:"",days:7.5,  hc:1},
+    {id:"m_p_a",cat:"모델링",item:"프랍 1종",  q:"A",res:"",days:3.75, hc:1},
+    {id:"m_p_b",cat:"모델링",item:"프랍 1종",  q:"B",res:"",days:1.5,  hc:1},
+    {id:"m_b_s",cat:"모델링",item:"배경 1종",  q:"S",res:"",days:30,   hc:1},
+    {id:"m_b_a",cat:"모델링",item:"배경 1종",  q:"A",res:"",days:22.5, hc:1},
+    {id:"m_b_b",cat:"모델링",item:"배경 1종",  q:"B",res:"",days:15,   hc:1},
+    {id:"ld_c_s_fhd",cat:"룩댑",item:"캐릭터 1종",q:"S",res:"FHD",days:7.5,  hc:1},
+    {id:"ld_c_s_4k", cat:"룩댑",item:"캐릭터 1종",q:"S",res:"4K", days:11.25,hc:1},
+    {id:"ld_c_a_fhd",cat:"룩댑",item:"캐릭터 1종",q:"A",res:"FHD",days:5.25, hc:1},
+    {id:"ld_c_a_4k", cat:"룩댑",item:"캐릭터 1종",q:"A",res:"4K", days:7.5,  hc:1},
+    {id:"ld_c_b_fhd",cat:"룩댑",item:"캐릭터 1종",q:"B",res:"FHD",days:3.75, hc:1},
+    {id:"ld_c_b_4k", cat:"룩댑",item:"캐릭터 1종",q:"B",res:"4K", days:5.25, hc:1},
+    {id:"ld_b_s_fhd",cat:"룩댑",item:"배경 1종",  q:"S",res:"FHD",days:11.25,hc:1},
+    {id:"ld_b_s_4k", cat:"룩댑",item:"배경 1종",  q:"S",res:"4K", days:15,   hc:1},
+    {id:"ld_b_a_fhd",cat:"룩댑",item:"배경 1종",  q:"A",res:"FHD",days:7.5,  hc:1},
+    {id:"ld_b_a_4k", cat:"룩댑",item:"배경 1종",  q:"A",res:"4K", days:11.25,hc:1},
+    {id:"ld_b_b_fhd",cat:"룩댑",item:"배경 1종",  q:"B",res:"FHD",days:5.25, hc:1},
+    {id:"ld_b_b_4k", cat:"룩댑",item:"배경 1종",  q:"B",res:"4K", days:7.5,  hc:1},
+    {id:"r_c_s",cat:"리깅",item:"캐릭터 1종",q:"S",res:"",days:7.5,  hc:1},
+    {id:"r_c_a",cat:"리깅",item:"캐릭터 1종",q:"A",res:"",days:5.25, hc:1},
+    {id:"r_c_b",cat:"리깅",item:"캐릭터 1종",q:"B",res:"",days:3.75, hc:1},
+    {id:"r_p_s",cat:"리깅",item:"프랍 1종",  q:"S",res:"",days:3.75, hc:1},
+    {id:"r_p_a",cat:"리깅",item:"프랍 1종",  q:"A",res:"",days:2.25, hc:1},
+    {id:"r_p_b",cat:"리깅",item:"프랍 1종",  q:"B",res:"",days:0.75, hc:1},
+  ],
+  production:[
+    {id:"an_s_24",cat:"애니메이션",q:"S",res:"",   fps:24,spw:5.33, hc:1},
+    {id:"an_s_30",cat:"애니메이션",q:"S",res:"",   fps:30,spw:4.67, hc:1},
+    {id:"an_a_24",cat:"애니메이션",q:"A",res:"",   fps:24,spw:8,    hc:1},
+    {id:"an_a_30",cat:"애니메이션",q:"A",res:"",   fps:30,spw:6.93, hc:1},
+    {id:"an_b_24",cat:"애니메이션",q:"B",res:"",   fps:24,spw:12,   hc:1},
+    {id:"an_b_30",cat:"애니메이션",q:"B",res:"",   fps:30,spw:10.53,hc:1},
+    {id:"lr_s_fhd_24",cat:"라이팅&렌더",q:"S",res:"FHD",fps:24,spw:5.33,hc:1},
+    {id:"lr_s_fhd_30",cat:"라이팅&렌더",q:"S",res:"FHD",fps:30,spw:4,   hc:1},
+    {id:"lr_s_4k_24", cat:"라이팅&렌더",q:"S",res:"4K", fps:24,spw:4,   hc:1},
+    {id:"lr_s_4k_30", cat:"라이팅&렌더",q:"S",res:"4K", fps:30,spw:2.67,hc:1},
+    {id:"lr_a_fhd_24",cat:"라이팅&렌더",q:"A",res:"FHD",fps:24,spw:8,   hc:1},
+    {id:"lr_a_fhd_30",cat:"라이팅&렌더",q:"A",res:"FHD",fps:30,spw:5.33,hc:1},
+    {id:"lr_a_4k_24", cat:"라이팅&렌더",q:"A",res:"4K", fps:24,spw:6.67,hc:1},
+    {id:"lr_a_4k_30", cat:"라이팅&렌더",q:"A",res:"4K", fps:30,spw:4,   hc:1},
+    {id:"lr_b_fhd_24",cat:"라이팅&렌더",q:"B",res:"FHD",fps:24,spw:12,  hc:1},
+    {id:"lr_b_fhd_30",cat:"라이팅&렌더",q:"B",res:"FHD",fps:30,spw:9.33,hc:1},
+    {id:"lr_b_4k_24", cat:"라이팅&렌더",q:"B",res:"4K", fps:24,spw:9.33,hc:1},
+    {id:"lr_b_4k_30", cat:"라이팅&렌더",q:"B",res:"4K", fps:30,spw:6.67,hc:1},
+    {id:"fx_s_24",cat:"FX",q:"S",res:"",fps:24,spw:5.33, hc:1},
+    {id:"fx_s_30",cat:"FX",q:"S",res:"",fps:30,spw:4.67, hc:1},
+    {id:"fx_a_24",cat:"FX",q:"A",res:"",fps:24,spw:8,    hc:1},
+    {id:"fx_a_30",cat:"FX",q:"A",res:"",fps:30,spw:6.93, hc:1},
+    {id:"fx_b_24",cat:"FX",q:"B",res:"",fps:24,spw:12,   hc:1},
+    {id:"fx_b_30",cat:"FX",q:"B",res:"",fps:30,spw:10.53,hc:1},
+    {id:"co_s_fhd_24",cat:"합성",q:"S",res:"FHD",fps:24,spw:5.33,hc:1},
+    {id:"co_s_fhd_30",cat:"합성",q:"S",res:"FHD",fps:30,spw:4,   hc:1},
+    {id:"co_s_4k_24", cat:"합성",q:"S",res:"4K", fps:24,spw:4,   hc:1},
+    {id:"co_s_4k_30", cat:"합성",q:"S",res:"4K", fps:30,spw:2.67,hc:1},
+    {id:"co_a_fhd_24",cat:"합성",q:"A",res:"FHD",fps:24,spw:8,   hc:1},
+    {id:"co_a_fhd_30",cat:"합성",q:"A",res:"FHD",fps:30,spw:5.33,hc:1},
+    {id:"co_a_4k_24", cat:"합성",q:"A",res:"4K", fps:24,spw:6.67,hc:1},
+    {id:"co_a_4k_30", cat:"합성",q:"A",res:"4K", fps:30,spw:4,   hc:1},
+    {id:"co_b_fhd_24",cat:"합성",q:"B",res:"FHD",fps:24,spw:12,  hc:1},
+    {id:"co_b_fhd_30",cat:"합성",q:"B",res:"FHD",fps:30,spw:9.33,hc:1},
+    {id:"co_b_4k_24", cat:"합성",q:"B",res:"4K", fps:24,spw:9.33,hc:1},
+    {id:"co_b_4k_30", cat:"합성",q:"B",res:"4K", fps:30,spw:6.67,hc:1},
+    {id:"sim_s_24",cat:"시뮬레이션",q:"S",res:"",fps:24,spw:5.33, hc:1},
+    {id:"sim_s_30",cat:"시뮬레이션",q:"S",res:"",fps:30,spw:4.67, hc:1},
+    {id:"sim_a_24",cat:"시뮬레이션",q:"A",res:"",fps:24,spw:8,    hc:1},
+    {id:"sim_a_30",cat:"시뮬레이션",q:"A",res:"",fps:30,spw:6.93, hc:1},
+    {id:"sim_b_24",cat:"시뮬레이션",q:"B",res:"",fps:24,spw:12,   hc:1},
+    {id:"sim_b_30",cat:"시뮬레이션",q:"B",res:"",fps:30,spw:10.53,hc:1},
+  ]
+};
+
+const DEFAULT_ALL_STANDARDS = {
+  cinematic: DEFAULT_STANDARDS_CINEMATIC,
+  animation: DEFAULT_STANDARDS_ANIMATION,
+};
+
 /* ── 자동 스케줄 계산 ───────────────────────────────────────────────────── */
 function calcAutoSchedule(project, standards, projectStartDate) {
   const q   = project.qualityGrade || "A";
@@ -1183,8 +1333,19 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const simDays0   = totalSecs>0 ? Math.ceil((totalSecs/simSpw)*7/simHC0): 0;
   const coDays0    = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0)  : 0;
 
-  // Preprod: design + storyboard in parallel (estimate ~25% of modeling, min 10 days)
-  const prepDays0 = Math.max(10, Math.round(modelDays0 * 0.25));
+  // Preprod: use preproduction standards if available, else estimate ~25% of modeling
+  const fpd = (cat, item, qual) => (standards.preproduction||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual);
+  const designWork = chars*(fpd("디자인","캐릭터 1종",q)?.days||0)
+                   + props*(fpd("디자인","프랍 1종",q)?.days||0)
+                   + bgs*(fpd("디자인","배경 1종",q)?.days||0);
+  const designHC0  = fpd("디자인","캐릭터 1종",q)?.hc || 1;
+  const designDays0 = designWork > 0 ? Math.ceil(designWork/designHC0) : 0;
+  const totalMins   = totalSecs / 60;
+  const sbEntry     = fpd("스토리보드/릴","1분",q);
+  const sbDays0     = sbEntry && totalMins > 0 ? Math.ceil(totalMins * sbEntry.days) : 0;
+  const prepDays0   = designDays0 > 0 || sbDays0 > 0
+    ? Math.max(designDays0, sbDays0)
+    : Math.max(10, Math.round(modelDays0 * 0.25));
 
   // Overlap factor: next phase starts when this fraction of previous phase is done (20% overlap)
   const OL = 0.8;
@@ -1301,7 +1462,11 @@ function App() {
   const [showSaved,  setShowSaved]  = useState(false);
   const [ganttStart, setGanttStart] = useState(() => new Date().toISOString().slice(0,10));
   const [ganttEnd,   setGanttEnd]   = useState(() => addDays(new Date().toISOString().slice(0,10), 60));
-  const [standards,  setStandards]  = useState(DEFAULT_STANDARDS);
+  const [allStandards, setAllStandards] = useState(() => {
+    try { const s=localStorage.getItem("locus_all_standards"); if(s) return JSON.parse(s); } catch{}
+    return DEFAULT_ALL_STANDARDS;
+  });
+  useEffect(()=>{ try{localStorage.setItem("locus_all_standards",JSON.stringify(allStandards));}catch{} },[allStandards]);
 
   useEffect(() => { if (project.deadline) setGanttEnd(project.deadline); }, [project.deadline]);
 
@@ -1317,12 +1482,13 @@ function App() {
 
   const handleAutoCalc = useCallback(()=>{
     const start = project.startDate || ganttStart;
-    const {phases, headcounts} = calcAutoSchedule(project, standards, start);
+    const stdKey = project.videoType === "3D 애니메이션" ? "animation" : "cinematic";
+    const activeStds = allStandards[stdKey] || allStandards.cinematic;
+    const {phases, headcounts} = calcAutoSchedule(project, activeStds, start);
     if (phases.length===0) { alert("프로젝트 정보(총 길이, 캐릭터 수 등)를 먼저 입력하세요."); return; }
     setSchedule(prev=>({...prev, phases}));
     if (project.deadline) setGanttEnd(project.deadline);
     setGanttStart(start);
-    // 견적 항목 headcount 자동 업데이트
     setQuote(q=>({...q, items: syncQuoteFromSchedule(phases, q.items).map(item=>{
       const roleId = item.roleId;
       const phaseId = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===roleId)?.[0];
@@ -1330,7 +1496,7 @@ function App() {
       const hc = hcMap[phaseId];
       return hc && headcounts[hc] ? {...item, headcount: headcounts[hc]} : item;
     })}));
-  },[project, standards, ganttStart]);
+  },[project, allStandards, ganttStart]);
 
   const saveProject = () => {
     const entry = {id:Date.now(),project,schedule,quote,savedAt:new Date().toLocaleString("ko-KR")};
@@ -1426,9 +1592,9 @@ function App() {
 
         {/* 탭 콘텐츠 */}
         {activeTab==="info"      && <ProjectInfoTab project={project} onChange={updateProject} />}
-        {activeTab==="schedule"  && <ScheduleTab schedule={schedule} onChange={updateSchedule} project={project} standards={standards} projectStart={project.startDate} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} onAutoCalc={handleAutoCalc} />}
+        {activeTab==="schedule"  && <ScheduleTab schedule={schedule} onChange={updateSchedule} project={project} projectStart={project.startDate} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} onAutoCalc={handleAutoCalc} />}
         {activeTab==="quote"     && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={true} />}
-        {activeTab==="standards" && <StandardsTab standards={standards} onChange={setStandards} />}
+        {activeTab==="standards" && <StandardsTab allStandards={allStandards} onChange={setAllStandards} />}
         {activeTab==="summary"   && <SummaryTab project={project} schedule={schedule} quote={quote} />}
 
         {/* 하단 네비게이션 */}
