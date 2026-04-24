@@ -33,14 +33,19 @@ const PHASE_CATEGORIES = [
       {id:"supervisor",label:"Supervisor",color:"#FFB085"}]},
   { id:"preproduction", label:"PreProduction", color:"#A78BFA",
     phases:[
-      {id:"design",label:"Design",color:"#A78BFA"},
-      {id:"storyboard_reel",label:"StoryBoard Reel",color:"#C4B5FD"}]},
+      {id:"art_director",label:"Art Director",color:"#7C3AED"},
+      {id:"sub_director",label:"조감독",color:"#8B5CF6"},
+      {id:"coordinator",label:"코디네이터",color:"#A78BFA"},
+      {id:"design",label:"Design",color:"#C4B5FD"},
+      {id:"storyboard_reel",label:"StoryBoard Reel",color:"#DDD6FE"}]},
   { id:"mainproduction", label:"MainProduction", color:"#34D399",
     phases:[
       {id:"modeling",label:"Modeling",color:"#34D399"},
       {id:"texture_shading",label:"Texture / Shading",color:"#6EE7B7"},
       {id:"rigging",label:"Rigging",color:"#059669"},
+      {id:"animation_lead",label:"Animator Lead",color:"#0EA5E9"},
       {id:"animation_main",label:"Animation",color:"#6B9ECC"},
+      {id:"lighting_lead",label:"Lighting Lead",color:"#D97706"},
       {id:"lighting_render",label:"Lighting & Render",color:"#F59E0B"},
       {id:"simulation",label:"Simulation",color:"#FCD34D"},
       {id:"fx",label:"FX",color:"#F472B6"},
@@ -62,6 +67,9 @@ const ROLE_CATEGORIES = [
       {id:"supervisor",label:"Supervisor",unit:"일",defaultRate:450000}]},
   { id:"preproduction", label:"PreProduction", color:"#A78BFA",
     roles:[
+      {id:"art_director",label:"Art Director",unit:"일",defaultRate:450000},
+      {id:"sub_director",label:"조감독",unit:"일",defaultRate:400000},
+      {id:"coordinator",label:"코디네이터",unit:"일",defaultRate:300000},
       {id:"storyboard_artist",label:"StoryBoard Artist",unit:"일",defaultRate:350000},
       {id:"designer",label:"Designer",unit:"일",defaultRate:350000}]},
   { id:"mainproduction", label:"MainProduction", color:"#34D399",
@@ -69,7 +77,9 @@ const ROLE_CATEGORIES = [
       {id:"modeler",label:"Modeler",unit:"일",defaultRate:400000},
       {id:"texture_shading",label:"Texture/Shading Artist",unit:"일",defaultRate:380000},
       {id:"rigger",label:"Rigger",unit:"일",defaultRate:380000},
+      {id:"animation_lead",label:"Animator Lead",unit:"일",defaultRate:500000},
       {id:"animator",label:"Animator",unit:"일",defaultRate:420000},
+      {id:"lighting_lead",label:"Lighting Lead",unit:"일",defaultRate:480000},
       {id:"lighting_render",label:"Lighting & Render Artist",unit:"일",defaultRate:400000},
       {id:"simulator",label:"Simulator",unit:"일",defaultRate:400000},
       {id:"fx_artist",label:"FX Artist",unit:"일",defaultRate:420000},
@@ -91,9 +101,11 @@ const getRole = id => ALL_ROLES.find(r=>r.id===id);
 
 const PHASE_ROLE_MAP = {
   pd:"pd", director:"director", supervisor:"supervisor",
+  art_director:"art_director", sub_director:"sub_director", coordinator:"coordinator",
   storyboard_reel:"storyboard_artist", design:"designer",
   modeling:"modeler", texture_shading:"texture_shading", rigging:"rigger",
-  animation_main:"animator", lighting_render:"lighting_render",
+  animation_lead:"animation_lead", animation_main:"animator",
+  lighting_lead:"lighting_lead", lighting_render:"lighting_render",
   simulation:"simulator", fx:"fx_artist", composition:"compositor",
   edit:"editor", color_grading:"colorist", sound_post:"sound"
 };
@@ -533,6 +545,20 @@ function ScheduleTab({schedule, onChange, project, projectStart, ganttStart, set
   const removePhase     = id => onChange("phases", schedule.phases.filter(p=>p.id!==id));
   const addPhase        = (catId,phaseId) => onChange("phases", [...schedule.phases, {id:Date.now(),phaseId,startDate:ganttStart,endDate:addDays(ganttStart,14),assignee:""}]);
 
+  const autoSetManagement = () => {
+    if (!project.deadline) { alert("프로젝트 정보에서 납품 기한을 먼저 설정하세요."); return; }
+    const projStart = project.startDate || ganttStart;
+    const mgmtIds = ["pd","director","supervisor"];
+    let phases = schedule.phases.map(p =>
+      mgmtIds.includes(p.phaseId) ? {...p, startDate:projStart, endDate:project.deadline} : p
+    );
+    mgmtIds.forEach(phaseId => {
+      if (!phases.find(p=>p.phaseId===phaseId))
+        phases.push({id:Date.now()+Math.random(), phaseId, startDate:projStart, endDate:project.deadline, assignee:""});
+    });
+    onChange("phases", phases);
+  };
+
   const withDates = schedule.phases.filter(p=>p.startDate&&p.endDate);
   const totalDays = withDates.length>0 ? daysBetween(
     withDates.reduce((a,p)=>p.startDate<a?p.startDate:a, withDates[0].startDate),
@@ -577,6 +603,13 @@ function ScheduleTab({schedule, onChange, project, projectStart, ganttStart, set
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
                     <div style={{width:3,height:16,borderRadius:2,background:cat.color}} />
                     <span style={{fontSize:13,fontWeight:800,color:cat.color,letterSpacing:"0.04em"}}>{cat.label}</span>
+                    {cat.id==="management" && (
+                      <button onClick={autoSetManagement}
+                        title={project.deadline?"납품 기한("+project.deadline+")으로 자동 설정":"먼저 납품 기한을 설정하세요"}
+                        style={{background:project.deadline?"#FF6B3518":"#F3F4F6",border:`1px solid ${project.deadline?"#FF6B3544":"#E5E7EB"}`,borderRadius:6,padding:"3px 9px",color:project.deadline?"#FF6B35":"#9CA3AF",fontSize:10,fontWeight:700,cursor:project.deadline?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
+                        📅 납품기한 자동 설정
+                      </button>
+                    )}
                   </div>
                   {addable.length>0 && (
                     <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
