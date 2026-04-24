@@ -1336,14 +1336,23 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const res = (project.resolution||"").includes("3840") ? "4K" : "FHD";
   const totalSecs = Number(project.duration) || 0;
   // Per-difficulty asset counts
-  const charS = Number(project.charS)||0; const charA = Number(project.charA)||0; const charB = Number(project.charB)||0;
-  const propS = Number(project.propS)||0; const propA = Number(project.propA)||0; const propB = Number(project.propB)||0;
-  const bgS   = Number(project.bgS)  ||0; const bgA   = Number(project.bgA)  ||0; const bgB   = Number(project.bgB)  ||0;
+  let charS = Number(project.charS)||0; let charA = Number(project.charA)||0; let charB = Number(project.charB)||0;
+  let propS = Number(project.propS)||0; let propA = Number(project.propA)||0; let propB = Number(project.propB)||0;
+  let bgS   = Number(project.bgS)  ||0; let bgA   = Number(project.bgA)  ||0; let bgB   = Number(project.bgB)  ||0;
   const totalAssets = charS+charA+charB+propS+propA+propB+bgS+bgA+bgB;
+  // Backward compat: old projects stored flat charCount/propCount/bgCount
+  if (totalAssets === 0) {
+    const oc = Number(project.charCount)||0, op = Number(project.propCount)||0, ob = Number(project.bgCount)||0;
+    if (oc+op+ob > 0) {
+      if (q==="S") { charS+=oc; propS+=op; bgS+=ob; }
+      else if (q==="B") { charB+=oc; propB+=op; bgB+=ob; }
+      else { charA+=oc; propA+=op; bgA+=ob; }
+    }
+  }
   const start = projectStartDate || new Date().toISOString().slice(0,10);
   const deadline = project.deadline || null;
 
-  if (totalSecs === 0 && totalAssets === 0) {
+  if (totalSecs === 0 && (charS+charA+charB+propS+propA+propB+bgS+bgA+bgB) === 0) {
     return {phases:[], headcounts:{}};
   }
 
