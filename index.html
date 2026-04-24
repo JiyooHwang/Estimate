@@ -30,14 +30,14 @@ const PHASE_CATEGORIES = [
     phases:[
       {id:"pd",label:"PD",color:"#FF6B35"},
       {id:"director",label:"Director",color:"#FF8C5A"},
-      {id:"supervisor",label:"Supervisor",color:"#FFB085"}]},
+      {id:"supervisor",label:"Supervisor",color:"#FFB085"},
+      {id:"art_director",label:"Art Director",color:"#FBBF24"},
+      {id:"sub_director",label:"조감독",color:"#FCD34D"},
+      {id:"coordinator",label:"코디네이터",color:"#FDE68A"}]},
   { id:"preproduction", label:"PreProduction", color:"#A78BFA",
     phases:[
-      {id:"art_director",label:"Art Director",color:"#7C3AED"},
-      {id:"sub_director",label:"조감독",color:"#8B5CF6"},
-      {id:"coordinator",label:"코디네이터",color:"#A78BFA"},
-      {id:"design",label:"Design",color:"#C4B5FD"},
-      {id:"storyboard_reel",label:"StoryBoard Reel",color:"#DDD6FE"}]},
+      {id:"design",label:"Design",color:"#A78BFA"},
+      {id:"storyboard_reel",label:"StoryBoard Reel",color:"#C4B5FD"}]},
   { id:"mainproduction", label:"MainProduction", color:"#34D399",
     phases:[
       {id:"modeling",label:"Modeling",color:"#34D399"},
@@ -64,12 +64,12 @@ const ROLE_CATEGORIES = [
     roles:[
       {id:"pd",label:"PD",unit:"일",defaultRate:600000},
       {id:"director",label:"Director",unit:"일",defaultRate:500000},
-      {id:"supervisor",label:"Supervisor",unit:"일",defaultRate:450000}]},
-  { id:"preproduction", label:"PreProduction", color:"#A78BFA",
-    roles:[
+      {id:"supervisor",label:"Supervisor",unit:"일",defaultRate:450000},
       {id:"art_director",label:"Art Director",unit:"일",defaultRate:450000},
       {id:"sub_director",label:"조감독",unit:"일",defaultRate:400000},
-      {id:"coordinator",label:"코디네이터",unit:"일",defaultRate:300000},
+      {id:"coordinator",label:"코디네이터",unit:"일",defaultRate:300000}]},
+  { id:"preproduction", label:"PreProduction", color:"#A78BFA",
+    roles:[
       {id:"storyboard_artist",label:"StoryBoard Artist",unit:"일",defaultRate:350000},
       {id:"designer",label:"Designer",unit:"일",defaultRate:350000}]},
   { id:"mainproduction", label:"MainProduction", color:"#34D399",
@@ -548,7 +548,7 @@ function ScheduleTab({schedule, onChange, project, projectStart, ganttStart, set
   const autoSetManagement = () => {
     if (!project.deadline) { alert("프로젝트 정보에서 납품 기한을 먼저 설정하세요."); return; }
     const projStart = project.startDate || ganttStart;
-    const mgmtIds = ["pd","director","supervisor"];
+    const mgmtIds = ["pd","director","supervisor","art_director","sub_director","coordinator"];
     let phases = schedule.phases.map(p =>
       mgmtIds.includes(p.phaseId) ? {...p, startDate:projStart, endDate:project.deadline} : p
     );
