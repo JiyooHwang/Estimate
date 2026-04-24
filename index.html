@@ -1631,8 +1631,13 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const coEnd      = addDays(coStart, coDays);
 
   const projEnd = deadline || coEnd;
-  // Hard-cap every phase end to the deadline so nothing overruns
+  // Cap both start and end dates to deadline; skip phase if start >= end after capping
   const cap = e => (deadline && e > deadline) ? deadline : e;
+  const pushPhase = (phaseId, s, e, hc) => {
+    const cs = (deadline && s > deadline) ? deadline : s;
+    const ce = cap(e);
+    if (cs < ce) phases.push(mk(phaseId, cs, ce, hc));
+  };
 
   const phases = [];
   if (coDays > 0 || anDays > 0 || modelDays > 0) {
@@ -1649,20 +1654,20 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
 
   // Preprod: design & storyboard in parallel
   if (prepDays > 0) {
-    phases.push(mk("design",         start, prepEnd, 1));
-    phases.push(mk("storyboard_reel",start, prepEnd, 1));
+    pushPhase("design",          start, cap(prepEnd), 1);
+    pushPhase("storyboard_reel", start, cap(prepEnd), 1);
   }
 
-  if (modelDays > 0) phases.push(mk("modeling",        modelStart,   cap(modelEnd),  modelHC));
-  if (rigDays  > 0) phases.push(mk("rigging",          rigLdStart,   cap(rigEnd),    rigHC));
-  if (ldDays   > 0) phases.push(mk("texture_shading",  rigLdStart,   cap(ldEnd),     ldHC));
-  if (anDays   > 0) phases.push(mk("animation_main",   anStart,      cap(anEnd),     anHC));
-  if (lrDays     > 0) phases.push(mk("lighting_render",  fxSimLrStart, cap(lrEnd),     lrHC));
-  if (fxDays     > 0) phases.push(mk("fx",               fxSimLrStart, cap(fxEnd),     fxHC));
-  if (simDays    > 0) phases.push(mk("simulation",       fxSimLrStart, cap(simEnd),    simHC));
-  if (useUnreal && unrealDays > 0) phases.push(mk("unreal", fxSimLrStart, cap(unrealEnd), unrealHC));
-  if (mgDays     > 0) phases.push(mk("motion_graphic",   fxSimLrStart, cap(mgEnd),     mgHC));
-  if (coDays     > 0) phases.push(mk("composition",      coStart,      cap(coEnd),     coHC));
+  if (modelDays > 0) pushPhase("modeling",        modelStart,   modelEnd,  modelHC);
+  if (rigDays  > 0) pushPhase("rigging",           rigLdStart,  rigEnd,    rigHC);
+  if (ldDays   > 0) pushPhase("texture_shading",   rigLdStart,  ldEnd,     ldHC);
+  if (anDays   > 0) pushPhase("animation_main",    anStart,     anEnd,     anHC);
+  if (lrDays   > 0) pushPhase("lighting_render",   fxSimLrStart, lrEnd,    lrHC);
+  if (fxDays   > 0) pushPhase("fx",                fxSimLrStart, fxEnd,    fxHC);
+  if (simDays  > 0) pushPhase("simulation",        fxSimLrStart, simEnd,   simHC);
+  if (useUnreal && unrealDays > 0) pushPhase("unreal",       fxSimLrStart, unrealEnd, unrealHC);
+  if (mgDays   > 0) pushPhase("motion_graphic",    fxSimLrStart, mgEnd,    mgHC);
+  if (coDays   > 0) pushPhase("composition",       coStart,      coEnd,    coHC);
 
   const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC,unreal:useUnreal?unrealHC:0,mg:mgHC};
   return {phases, headcounts};
@@ -1687,7 +1692,22 @@ function App() {
   const [ganttStart, setGanttStart] = useState(() => new Date().toISOString().slice(0,10));
   const [ganttEnd,   setGanttEnd]   = useState(() => addDays(new Date().toISOString().slice(0,10), 60));
   const [allStandards, setAllStandards] = useState(() => {
-    try { const s=localStorage.getItem("locus_all_standards"); if(s) return JSON.parse(s); } catch{}
+    const mergeStds = (loaded, def) => {
+      if (!loaded) return def;
+      const existIds = new Set((loaded.production||[]).map(r=>r.id));
+      const missing = (def.production||[]).filter(r=>!existIds.has(r.id));
+      return missing.length ? {...loaded, production:[...(loaded.production||[]),...missing]} : loaded;
+    };
+    try {
+      const s=localStorage.getItem("locus_all_standards");
+      if(s) {
+        const loaded=JSON.parse(s);
+        return {
+          cinematic: mergeStds(loaded.cinematic, DEFAULT_ALL_STANDARDS.cinematic),
+          animation: mergeStds(loaded.animation,  DEFAULT_ALL_STANDARDS.animation),
+        };
+      }
+    } catch{}
     return DEFAULT_ALL_STANDARDS;
   });
   useEffect(()=>{ try{localStorage.setItem("locus_all_standards",JSON.stringify(allStandards));}catch{} },[allStandards]);
