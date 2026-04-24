@@ -19,6 +19,7 @@
   ::-webkit-scrollbar-track { background: #F4F5F7; }
   ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+  @media print { .no-print { display: none !important; } }
 </style>
 </head>
 <body>
@@ -49,6 +50,8 @@ const PHASE_CATEGORIES = [
       {id:"lighting_render",label:"Lighting & Render",color:"#F59E0B"},
       {id:"simulation",label:"Simulation",color:"#FCD34D"},
       {id:"fx",label:"FX",color:"#F472B6"},
+      {id:"motion_graphic",label:"Motion Graphic",color:"#EC4899"},
+      {id:"unreal",label:"Unreal",color:"#7C3AED"},
       {id:"composition",label:"Composition",color:"#FB7185"}]},
   { id:"postproduction", label:"PostProduction", color:"#6B9ECC",
     phases:[
@@ -83,6 +86,8 @@ const ROLE_CATEGORIES = [
       {id:"lighting_render",label:"Lighting & Render Artist",unit:"일",defaultRate:400000},
       {id:"simulator",label:"Simulator",unit:"일",defaultRate:400000},
       {id:"fx_artist",label:"FX Artist",unit:"일",defaultRate:420000},
+      {id:"motion_graphic_artist",label:"Motion Graphic Artist",unit:"일",defaultRate:380000},
+      {id:"unreal_artist",label:"Unreal Artist",unit:"일",defaultRate:420000},
       {id:"compositor",label:"Compositor",unit:"일",defaultRate:380000}]},
   { id:"postproduction", label:"PostProduction", color:"#6B9ECC",
     roles:[
@@ -106,7 +111,7 @@ const PHASE_ROLE_MAP = {
   modeling:"modeler", texture_shading:"texture_shading", rigging:"rigger",
   animation_lead:"animation_lead", animation_main:"animator",
   lighting_lead:"lighting_lead", lighting_render:"lighting_render",
-  simulation:"simulator", fx:"fx_artist", composition:"compositor",
+  simulation:"simulator", fx:"fx_artist", motion_graphic:"motion_graphic_artist", unreal:"unreal_artist", composition:"compositor",
   edit:"editor", color_grading:"colorist", sound_post:"sound"
 };
 
@@ -882,7 +887,7 @@ function StandardsTab({allStandards, onChange}) {
   };
 
   const assetCats = ["모델링","룩댑","리깅"];
-  const prodCats  = ["애니메이션","라이팅&렌더","FX","합성","시뮬레이션"];
+  const prodCats  = ["애니메이션","라이팅&렌더","FX","합성","시뮬레이션","언리얼","모션그래픽"];
   const qColor    = {S:"#C8102E",A:"#F59E0B",B:"#34D399"};
   const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:6,padding:"4px 6px",color:"#1A1A2E",fontSize:12,outline:"none",textAlign:"right",width:65};
   const inSS= {...inS,width:48};
@@ -1148,6 +1153,74 @@ function SummaryTab({project, schedule, quote}) {
 }
 
 
+/* ── 내부인원 탭 ─────────────────────────────────────────────────────── */
+function InternalStaffTab({internalStaff, onChange}) {
+  const STAFF_GROUPS = [
+    { label:"Management", color:"#FF6B35", roles:[
+      {id:"director",    label:"Director"},
+      {id:"pd",          label:"PD"},
+      {id:"coordinator", label:"코디네이터"},
+      {id:"art_director",label:"Art Director"},
+      {id:"sub_director",label:"조감독"},
+    ]},
+    { label:"PreProduction", color:"#A78BFA", roles:[
+      {id:"designer",          label:"디자인"},
+      {id:"storyboard_artist", label:"스토리보드/릴"},
+    ]},
+    { label:"MainProduction", color:"#34D399", roles:[
+      {id:"modeler",               label:"모델링"},
+      {id:"texture_shading",       label:"룩댑(텍스처/쉐이딩)"},
+      {id:"rigger",                label:"리깅"},
+      {id:"animator",              label:"애니메이터"},
+      {id:"lighting_render",       label:"라이팅&렌더"},
+      {id:"fx_artist",             label:"FX"},
+      {id:"motion_graphic_artist", label:"모션그래픽"},
+      {id:"unreal_artist",         label:"언리얼"},
+      {id:"compositor",            label:"합성"},
+    ]},
+  ];
+  const update = (id, val) => onChange({...internalStaff, [id]: Math.max(0, Number(val)||0)});
+  const th = {padding:"9px 14px",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"2px solid #E5E7EB",background:"#F4F5F7"};
+  return (
+    <div className="no-print" style={{display:"flex",flexDirection:"column",gap:20}}>
+      <Card>
+        <h3 style={{margin:"0 0 6px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>👥 내부 인원 현황</h3>
+        <p style={{fontSize:12,color:"#6B7280",marginBottom:20}}>파트별 내부 인원 수를 설정합니다. 자동 계산 시 이 인원수를 기준으로 배치됩니다. (PDF 미출력)</p>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",maxWidth:500,borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr>
+                <th style={{...th,textAlign:"left",width:140}}>항목</th>
+                <th style={{...th,textAlign:"left"}}>Team</th>
+                <th style={{...th,textAlign:"center",width:100}}>(단위: 명)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {STAFF_GROUPS.flatMap((group,gi) => [
+                <tr key={`g-${gi}`} style={{background:`${group.color}18`}}>
+                  <td colSpan={3} style={{padding:"7px 14px",fontSize:11,fontWeight:800,color:group.color,textTransform:"uppercase",letterSpacing:"0.08em"}}>{group.label}</td>
+                </tr>,
+                ...group.roles.map((role,ri) => (
+                  <tr key={role.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>
+                    <td style={{padding:"6px 14px",borderBottom:"1px solid #F3F4F6"}} />
+                    <td style={{padding:"6px 14px",color:"#374151",fontWeight:600,borderBottom:"1px solid #F3F4F6"}}>{role.label}</td>
+                    <td style={{padding:"4px 14px",borderBottom:"1px solid #F3F4F6",textAlign:"center"}}>
+                      <input type="number" min="0" value={internalStaff[role.id]??1}
+                        onChange={e=>update(role.id, e.target.value)}
+                        style={{width:64,textAlign:"center",background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:7,padding:"5px 8px",fontSize:14,fontWeight:700,outline:"none"}} />
+                    </td>
+                  </tr>
+                ))
+              ])}
+            </tbody>
+          </table>
+        </div>
+        <div style={{marginTop:14,fontSize:11,color:"#9CA3AF"}}>※ 설정한 인원 수는 자동 저장됩니다. ⚡ 자동 설정 버튼을 누를 때 반영됩니다.</div>
+      </Card>
+    </div>
+  );
+}
+
 /* ── 메인 앱 (로그인 없음) ───────────────────────────────────────────── */
 const DEFAULT_PROJECT = {name:"",client:"",manager:"",startDate:"",deadline:"",videoType:"",description:"",duration:"",resolution:"1920x1080",format:"mp4_h264",revisions:"3",music:"",subtitle:"",fps:"24",qualityGrade:"A",charS:"0",charA:"1",charB:"0",propS:"0",propA:"0",propB:"0",bgS:"0",bgA:"1",bgB:"0"};
 const DEFAULT_SCHEDULE = {phases:[],note:""};
@@ -1238,6 +1311,30 @@ const DEFAULT_STANDARDS_CINEMATIC = {
     {id:"sim_a_30",cat:"시뮬레이션",q:"A",res:"",fps:30,spw:5.2,hc:1},
     {id:"sim_b_24",cat:"시뮬레이션",q:"B",res:"",fps:24,spw:9,  hc:1},
     {id:"sim_b_30",cat:"시뮬레이션",q:"B",res:"",fps:30,spw:7.9,hc:1},
+    {id:"ur_s_fhd_24",cat:"언리얼",q:"S",res:"FHD",fps:24,spw:4,  hc:1},
+    {id:"ur_s_fhd_30",cat:"언리얼",q:"S",res:"FHD",fps:30,spw:3,  hc:1},
+    {id:"ur_s_4k_24", cat:"언리얼",q:"S",res:"4K", fps:24,spw:3,  hc:1},
+    {id:"ur_s_4k_30", cat:"언리얼",q:"S",res:"4K", fps:30,spw:2,  hc:1},
+    {id:"ur_a_fhd_24",cat:"언리얼",q:"A",res:"FHD",fps:24,spw:6,  hc:1},
+    {id:"ur_a_fhd_30",cat:"언리얼",q:"A",res:"FHD",fps:30,spw:4,  hc:1},
+    {id:"ur_a_4k_24", cat:"언리얼",q:"A",res:"4K", fps:24,spw:5,  hc:1},
+    {id:"ur_a_4k_30", cat:"언리얼",q:"A",res:"4K", fps:30,spw:3,  hc:1},
+    {id:"ur_b_fhd_24",cat:"언리얼",q:"B",res:"FHD",fps:24,spw:9,  hc:1},
+    {id:"ur_b_fhd_30",cat:"언리얼",q:"B",res:"FHD",fps:30,spw:7,  hc:1},
+    {id:"ur_b_4k_24", cat:"언리얼",q:"B",res:"4K", fps:24,spw:7,  hc:1},
+    {id:"ur_b_4k_30", cat:"언리얼",q:"B",res:"4K", fps:30,spw:5,  hc:1},
+    {id:"mg_s_fhd_24",cat:"모션그래픽",q:"S",res:"FHD",fps:24,spw:4,  hc:1},
+    {id:"mg_s_fhd_30",cat:"모션그래픽",q:"S",res:"FHD",fps:30,spw:3,  hc:1},
+    {id:"mg_s_4k_24", cat:"모션그래픽",q:"S",res:"4K", fps:24,spw:3,  hc:1},
+    {id:"mg_s_4k_30", cat:"모션그래픽",q:"S",res:"4K", fps:30,spw:2,  hc:1},
+    {id:"mg_a_fhd_24",cat:"모션그래픽",q:"A",res:"FHD",fps:24,spw:6,  hc:1},
+    {id:"mg_a_fhd_30",cat:"모션그래픽",q:"A",res:"FHD",fps:30,spw:4,  hc:1},
+    {id:"mg_a_4k_24", cat:"모션그래픽",q:"A",res:"4K", fps:24,spw:5,  hc:1},
+    {id:"mg_a_4k_30", cat:"모션그래픽",q:"A",res:"4K", fps:30,spw:3,  hc:1},
+    {id:"mg_b_fhd_24",cat:"모션그래픽",q:"B",res:"FHD",fps:24,spw:9,  hc:1},
+    {id:"mg_b_fhd_30",cat:"모션그래픽",q:"B",res:"FHD",fps:30,spw:7,  hc:1},
+    {id:"mg_b_4k_24", cat:"모션그래픽",q:"B",res:"4K", fps:24,spw:7,  hc:1},
+    {id:"mg_b_4k_30", cat:"모션그래픽",q:"B",res:"4K", fps:30,spw:5,  hc:1},
   ]
 };
 
@@ -1321,6 +1418,30 @@ const DEFAULT_STANDARDS_ANIMATION = {
     {id:"sim_a_30",cat:"시뮬레이션",q:"A",res:"",fps:30,spw:6.93, hc:1},
     {id:"sim_b_24",cat:"시뮬레이션",q:"B",res:"",fps:24,spw:12,   hc:1},
     {id:"sim_b_30",cat:"시뮬레이션",q:"B",res:"",fps:30,spw:10.53,hc:1},
+    {id:"ur_s_fhd_24",cat:"언리얼",q:"S",res:"FHD",fps:24,spw:5.33,hc:1},
+    {id:"ur_s_fhd_30",cat:"언리얼",q:"S",res:"FHD",fps:30,spw:4,   hc:1},
+    {id:"ur_s_4k_24", cat:"언리얼",q:"S",res:"4K", fps:24,spw:4,   hc:1},
+    {id:"ur_s_4k_30", cat:"언리얼",q:"S",res:"4K", fps:30,spw:2.67,hc:1},
+    {id:"ur_a_fhd_24",cat:"언리얼",q:"A",res:"FHD",fps:24,spw:8,   hc:1},
+    {id:"ur_a_fhd_30",cat:"언리얼",q:"A",res:"FHD",fps:30,spw:5.33,hc:1},
+    {id:"ur_a_4k_24", cat:"언리얼",q:"A",res:"4K", fps:24,spw:6.67,hc:1},
+    {id:"ur_a_4k_30", cat:"언리얼",q:"A",res:"4K", fps:30,spw:4,   hc:1},
+    {id:"ur_b_fhd_24",cat:"언리얼",q:"B",res:"FHD",fps:24,spw:12,  hc:1},
+    {id:"ur_b_fhd_30",cat:"언리얼",q:"B",res:"FHD",fps:30,spw:9.33,hc:1},
+    {id:"ur_b_4k_24", cat:"언리얼",q:"B",res:"4K", fps:24,spw:9.33,hc:1},
+    {id:"ur_b_4k_30", cat:"언리얼",q:"B",res:"4K", fps:30,spw:6.67,hc:1},
+    {id:"mg_s_fhd_24",cat:"모션그래픽",q:"S",res:"FHD",fps:24,spw:5.33,hc:1},
+    {id:"mg_s_fhd_30",cat:"모션그래픽",q:"S",res:"FHD",fps:30,spw:4,   hc:1},
+    {id:"mg_s_4k_24", cat:"모션그래픽",q:"S",res:"4K", fps:24,spw:4,   hc:1},
+    {id:"mg_s_4k_30", cat:"모션그래픽",q:"S",res:"4K", fps:30,spw:2.67,hc:1},
+    {id:"mg_a_fhd_24",cat:"모션그래픽",q:"A",res:"FHD",fps:24,spw:8,   hc:1},
+    {id:"mg_a_fhd_30",cat:"모션그래픽",q:"A",res:"FHD",fps:30,spw:5.33,hc:1},
+    {id:"mg_a_4k_24", cat:"모션그래픽",q:"A",res:"4K", fps:24,spw:6.67,hc:1},
+    {id:"mg_a_4k_30", cat:"모션그래픽",q:"A",res:"4K", fps:30,spw:4,   hc:1},
+    {id:"mg_b_fhd_24",cat:"모션그래픽",q:"B",res:"FHD",fps:24,spw:12,  hc:1},
+    {id:"mg_b_fhd_30",cat:"모션그래픽",q:"B",res:"FHD",fps:30,spw:9.33,hc:1},
+    {id:"mg_b_4k_24", cat:"모션그래픽",q:"B",res:"4K", fps:24,spw:9.33,hc:1},
+    {id:"mg_b_4k_30", cat:"모션그래픽",q:"B",res:"4K", fps:30,spw:6.67,hc:1},
   ]
 };
 
@@ -1329,8 +1450,15 @@ const DEFAULT_ALL_STANDARDS = {
   animation: DEFAULT_STANDARDS_ANIMATION,
 };
 
+const DEFAULT_INTERNAL_STAFF = {
+  pd:1, director:1, coordinator:2, art_director:1, sub_director:1,
+  designer:10, storyboard_artist:4, animation_lead:1, lighting_lead:1,
+  modeler:12, texture_shading:7, rigger:4, animator:10,
+  lighting_render:12, fx_artist:4, motion_graphic_artist:1, unreal_artist:2, compositor:4, simulator:4,
+};
+
 /* ── 자동 스케줄 계산 ───────────────────────────────────────────────────── */
-function calcAutoSchedule(project, standards, projectStartDate) {
+function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const q   = project.qualityGrade || "A";
   const fps = Number(project.fps) || 24;
   const res = (project.resolution||"").includes("3840") ? "4K" : "FHD";
@@ -1370,31 +1498,38 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const rigWork   = charS*(fa("리깅","캐릭터 1종","S")?.days||0) + charA*(fa("리깅","캐릭터 1종","A")?.days||0) + charB*(fa("리깅","캐릭터 1종","B")?.days||0)
                   + propS*(fa("리깅","프랍 1종","S")?.days||0)   + propA*(fa("리깅","프랍 1종","A")?.days||0)   + propB*(fa("리깅","프랍 1종","B")?.days||0);
 
-  const anSpw  = fp("애니메이션",q,fps)?.spw     || 1;
-  const lrSpw  = fp("라이팅&렌더",q,fps,res)?.spw || 1;
-  const fxSpw  = fp("FX",q,fps)?.spw             || 1;
-  const simSpw = fp("시뮬레이션",q,fps)?.spw      || 1;
-  const coSpw  = fp("합성",q,fps,res)?.spw        || 1;
+  const anSpw    = fp("애니메이션",q,fps)?.spw       || 1;
+  const lrSpw    = fp("라이팅&렌더",q,fps,res)?.spw  || 1;
+  const fxSpw    = fp("FX",q,fps)?.spw               || 1;
+  const simSpw   = fp("시뮬레이션",q,fps)?.spw        || 1;
+  const coSpw    = fp("합성",q,fps,res)?.spw          || 1;
+  const unrealSpw = fp("언리얼",q,fps,res)?.spw       || lrSpw;
+  const mgSpw     = fp("모션그래픽",q,fps,res)?.spw   || coSpw;
 
-  // Base headcounts from standards (hc field)
-  const modelHC0 = fa("모델링","캐릭터 1종",q)?.hc    || 1;
-  const ldHC0    = fa("룩댑","캐릭터 1종",q,res)?.hc  || 1;
-  const rigHC0   = fa("리깅","캐릭터 1종",q)?.hc      || 1;
-  const anHC0    = fp("애니메이션",q,fps)?.hc          || 1;
-  const lrHC0    = fp("라이팅&렌더",q,fps,res)?.hc    || 1;
-  const fxHC0    = fp("FX",q,fps)?.hc                  || 1;
-  const simHC0   = fp("시뮬레이션",q,fps)?.hc          || 1;
-  const coHC0    = fp("합성",q,fps,res)?.hc            || 1;
+  // Headcounts: use internal staff counts (fall back to standards hc)
+  const is = internalStaff || {};
+  const modelHC0  = is.modeler               || fa("모델링","캐릭터 1종",q)?.hc    || 1;
+  const ldHC0     = is.texture_shading       || fa("룩댑","캐릭터 1종",q,res)?.hc  || 1;
+  const rigHC0    = is.rigger                || fa("리깅","캐릭터 1종",q)?.hc      || 1;
+  const anHC0     = is.animator              || fp("애니메이션",q,fps)?.hc          || 1;
+  const lrHC0     = is.lighting_render       || fp("라이팅&렌더",q,fps,res)?.hc    || 1;
+  const fxHC0     = is.fx_artist             || fp("FX",q,fps)?.hc                  || 1;
+  const simHC0    = is.simulator             || fp("시뮬레이션",q,fps)?.hc          || 1;
+  const coHC0     = is.compositor            || fp("합성",q,fps,res)?.hc            || 1;
+  const unrealHC0 = is.unreal_artist         || fp("언리얼",q,fps,res)?.hc          || 1;
+  const mgHC0     = is.motion_graphic_artist || fp("모션그래픽",q,fps,res)?.hc      || 1;
 
   // Base durations: work / headcount
-  const modelDays0 = modelWork>0 ? Math.ceil(modelWork/modelHC0) : 0;
-  const ldDays0    = ldWork>0    ? Math.ceil(ldWork/ldHC0)       : 0;
-  const rigDays0   = rigWork>0   ? Math.ceil(rigWork/rigHC0)     : 0;
-  const anDays0    = totalSecs>0 ? Math.ceil((totalSecs/anSpw)*7/anHC0)  : 0;
-  const lrDays0    = totalSecs>0 ? Math.ceil((totalSecs/lrSpw)*7/lrHC0)  : 0;
-  const fxDays0    = totalSecs>0 ? Math.ceil((totalSecs/fxSpw)*7/fxHC0)  : 0;
-  const simDays0   = totalSecs>0 ? Math.ceil((totalSecs/simSpw)*7/simHC0): 0;
-  const coDays0    = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0)  : 0;
+  const modelDays0  = modelWork>0 ? Math.ceil(modelWork/modelHC0)  : 0;
+  const ldDays0     = ldWork>0    ? Math.ceil(ldWork/ldHC0)        : 0;
+  const rigDays0    = rigWork>0   ? Math.ceil(rigWork/rigHC0)      : 0;
+  const anDays0     = totalSecs>0 ? Math.ceil((totalSecs/anSpw)*7/anHC0)      : 0;
+  const lrDays0     = totalSecs>0 ? Math.ceil((totalSecs/lrSpw)*7/lrHC0)      : 0;
+  const fxDays0     = totalSecs>0 ? Math.ceil((totalSecs/fxSpw)*7/fxHC0)      : 0;
+  const simDays0    = totalSecs>0 ? Math.ceil((totalSecs/simSpw)*7/simHC0)     : 0;
+  const coDays0     = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0)       : 0;
+  const unrealDays0 = totalSecs>0 ? Math.ceil((totalSecs/unrealSpw)*7/unrealHC0): 0;
+  const mgDays0     = totalSecs>0 ? Math.ceil((totalSecs/mgSpw)*7/mgHC0)       : 0;
 
   // Preprod: use preproduction standards if available, else estimate ~25% of modeling
   const fpd = (cat, item, qual) => (standards.preproduction||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual);
@@ -1415,12 +1550,12 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const ol0 = d => Math.round(d * OL);
 
   // Critical path with overlaps:
-  // preprod → (modeling OL) → (max(rig,ld) OL) → (anim OL) → (max(lr,fx,sim) OL) → comp
+  // preprod → (modeling OL) → (max(rig,ld) OL) → (anim OL) → (max(lr,fx,sim,unreal,mg) OL) → comp
   const critical0 = prepDays0
                   + ol0(modelDays0)
                   + ol0(Math.max(rigDays0, ldDays0))
                   + ol0(anDays0)
-                  + ol0(Math.max(lrDays0, fxDays0, simDays0))
+                  + ol0(Math.max(lrDays0, fxDays0, simDays0, unrealDays0, mgDays0))
                   + coDays0;
 
   // Scale to fit within deadline
@@ -1434,23 +1569,27 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const sh = h => Math.ceil(h*scale);
   const ol = d => Math.round(d * OL);
 
-  const prepDays  = sd(prepDays0);
-  const modelDays = sd(modelDays0);
-  const ldDays    = sd(ldDays0);
-  const rigDays   = sd(rigDays0);
-  const anDays    = sd(anDays0);
-  const lrDays    = sd(lrDays0);
-  const fxDays    = sd(fxDays0);
-  const simDays   = sd(simDays0);
-  const coDays    = sd(coDays0);
-  const modelHC   = sh(modelHC0);
-  const ldHC      = sh(ldHC0);
-  const rigHC     = sh(rigHC0);
-  const anHC      = sh(anHC0);
-  const lrHC      = sh(lrHC0);
-  const fxHC      = sh(fxHC0);
-  const simHC     = sh(simHC0);
-  const coHC      = sh(coHC0);
+  const prepDays    = sd(prepDays0);
+  const modelDays   = sd(modelDays0);
+  const ldDays      = sd(ldDays0);
+  const rigDays     = sd(rigDays0);
+  const anDays      = sd(anDays0);
+  const lrDays      = sd(lrDays0);
+  const fxDays      = sd(fxDays0);
+  const simDays     = sd(simDays0);
+  const coDays      = sd(coDays0);
+  const unrealDays  = sd(unrealDays0);
+  const mgDays      = sd(mgDays0);
+  const modelHC     = sh(modelHC0);
+  const ldHC        = sh(ldHC0);
+  const rigHC       = sh(rigHC0);
+  const anHC        = sh(anHC0);
+  const lrHC        = sh(lrHC0);
+  const fxHC        = sh(fxHC0);
+  const simHC       = sh(simHC0);
+  const coHC        = sh(coHC0);
+  const unrealHC    = sh(unrealHC0);
+  const mgHC        = sh(mgHC0);
 
   const mk = (phaseId, s, e, hc) => ({id:Date.now()+Math.random(),phaseId,startDate:s,endDate:e,assignee:`${hc}명`});
 
@@ -1468,15 +1607,16 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const anStart    = addDays(rigLdStart, ol(Math.max(rigDays, ldDays)));
   const anEnd      = addDays(anStart, anDays);
 
-  // LR + FX + Sim: start when animation is OL done
-  // FX and Sim end before LR (naturally shorter or same; LR longer for 4K)
+  // LR + FX + Sim + Unreal + MG: all start when animation is OL done
   const fxSimLrStart = addDays(anStart, ol(anDays));
-  const lrEnd      = addDays(fxSimLrStart, lrDays);
-  const fxEnd      = addDays(fxSimLrStart, fxDays);
-  const simEnd     = addDays(fxSimLrStart, simDays);
+  const lrEnd        = addDays(fxSimLrStart, lrDays);
+  const fxEnd        = addDays(fxSimLrStart, fxDays);
+  const simEnd       = addDays(fxSimLrStart, simDays);
+  const unrealEnd    = addDays(fxSimLrStart, unrealDays);
+  const mgEnd        = addDays(fxSimLrStart, mgDays);
 
-  // Composition: starts when max(lr, fx, sim) is OL done
-  const coStart    = addDays(fxSimLrStart, ol(Math.max(lrDays, fxDays, simDays)));
+  // Composition: starts when max(lr, fx, sim, unreal, mg) is OL done
+  const coStart    = addDays(fxSimLrStart, ol(Math.max(lrDays, fxDays, simDays, unrealDays, mgDays)));
   const coEnd      = addDays(coStart, coDays);
 
   const projEnd = deadline || coEnd;
@@ -1504,12 +1644,14 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   if (rigDays  > 0) phases.push(mk("rigging",          rigLdStart, rigEnd,   rigHC));
   if (ldDays   > 0) phases.push(mk("texture_shading",  rigLdStart, ldEnd,    ldHC));
   if (anDays   > 0) phases.push(mk("animation_main",   anStart,    anEnd,    anHC));
-  if (lrDays   > 0) phases.push(mk("lighting_render",  fxSimLrStart, lrEnd,  lrHC));
-  if (fxDays   > 0) phases.push(mk("fx",               fxSimLrStart, fxEnd,  fxHC));
-  if (simDays  > 0) phases.push(mk("simulation",       fxSimLrStart, simEnd, simHC));
-  if (coDays   > 0) phases.push(mk("composition",      coStart,    coEnd,    coHC));
+  if (lrDays     > 0) phases.push(mk("lighting_render",  fxSimLrStart, lrEnd,     lrHC));
+  if (fxDays     > 0) phases.push(mk("fx",               fxSimLrStart, fxEnd,     fxHC));
+  if (simDays    > 0) phases.push(mk("simulation",       fxSimLrStart, simEnd,    simHC));
+  if (unrealDays > 0) phases.push(mk("unreal",           fxSimLrStart, unrealEnd, unrealHC));
+  if (mgDays     > 0) phases.push(mk("motion_graphic",   fxSimLrStart, mgEnd,     mgHC));
+  if (coDays     > 0) phases.push(mk("composition",      coStart,      coEnd,     coHC));
 
-  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC};
+  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC,unreal:unrealHC,mg:mgHC};
   return {phases, headcounts};
 }
 
@@ -1518,6 +1660,7 @@ const TABS = [
   {id:"schedule",  label:"스케줄",        icon:"📅"},
   {id:"quote",     label:"견적",          icon:"💰"},
   {id:"standards", label:"기준표",        icon:"📋"},
+  {id:"staff",     label:"내부인원",      icon:"👥"},
   {id:"summary",   label:"요약",          icon:"📊"}
 ];
 
@@ -1536,6 +1679,12 @@ function App() {
   });
   useEffect(()=>{ try{localStorage.setItem("locus_all_standards",JSON.stringify(allStandards));}catch{} },[allStandards]);
 
+  const [internalStaff, setInternalStaff] = useState(() => {
+    try { const s=localStorage.getItem("locus_internal_staff"); if(s) return {...DEFAULT_INTERNAL_STAFF,...JSON.parse(s)}; } catch{}
+    return DEFAULT_INTERNAL_STAFF;
+  });
+  useEffect(()=>{ try{localStorage.setItem("locus_internal_staff",JSON.stringify(internalStaff));}catch{} },[internalStaff]);
+
   useEffect(() => { if (project.deadline) setGanttEnd(project.deadline); }, [project.deadline]);
 
   const updateProject  = useCallback((f,v)=>setProject(p=>({...p,[f]:v})),[]);
@@ -1552,7 +1701,7 @@ function App() {
     const start = project.startDate || ganttStart;
     const stdKey = project.videoType === "3D 애니메이션" ? "animation" : "cinematic";
     const activeStds = allStandards[stdKey] || allStandards.cinematic;
-    const {phases, headcounts} = calcAutoSchedule(project, activeStds, start);
+    const {phases, headcounts} = calcAutoSchedule(project, activeStds, start, internalStaff);
     if (phases.length===0) { alert("프로젝트 정보(총 길이, 캐릭터 수 등)를 먼저 입력하세요."); return; }
     setSchedule(prev=>({...prev, phases}));
     if (project.deadline) setGanttEnd(project.deadline);
@@ -1560,11 +1709,11 @@ function App() {
     setQuote(q=>({...q, items: syncQuoteFromSchedule(phases, q.items).map(item=>{
       const roleId = item.roleId;
       const phaseId = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===roleId)?.[0];
-      const hcMap = {modeling:"model",texture_shading:"lookDev",rigging:"rigging",animation_main:"anim",lighting_render:"lr",fx:"fx",simulation:"sim",composition:"comp"};
+      const hcMap = {modeling:"model",texture_shading:"lookDev",rigging:"rigging",animation_main:"anim",lighting_render:"lr",fx:"fx",simulation:"sim",composition:"comp",unreal:"unreal",motion_graphic:"mg"};
       const hc = hcMap[phaseId];
       return hc && headcounts[hc] ? {...item, headcount: headcounts[hc]} : item;
     })}));
-  },[project, allStandards, ganttStart]);
+  },[project, allStandards, ganttStart, internalStaff]);
 
   const saveProject = () => {
     const entry = {id:Date.now(),project,schedule,quote,savedAt:new Date().toLocaleString("ko-KR")};
@@ -1663,6 +1812,7 @@ function App() {
         {activeTab==="schedule"  && <ScheduleTab schedule={schedule} onChange={updateSchedule} project={project} projectStart={project.startDate} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} onAutoCalc={handleAutoCalc} />}
         {activeTab==="quote"     && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={true} />}
         {activeTab==="standards" && <StandardsTab allStandards={allStandards} onChange={setAllStandards} />}
+        {activeTab==="staff"     && <InternalStaffTab internalStaff={internalStaff} onChange={setInternalStaff} />}
         {activeTab==="summary"   && <SummaryTab project={project} schedule={schedule} quote={quote} />}
 
         {/* 하단 네비게이션 */}
