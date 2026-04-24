@@ -1475,9 +1475,14 @@ function calcAutoSchedule(project, standards, projectStartDate) {
   const phases = [];
   if (coDays > 0 || anDays > 0 || modelDays > 0) {
     // Management: full span
-    phases.push(mk("pd",         start, projEnd, 1));
-    phases.push(mk("director",   start, projEnd, 1));
-    phases.push(mk("supervisor", start, projEnd, 1));
+    phases.push(mk("pd",           start, projEnd, 1));
+    phases.push(mk("director",     start, projEnd, 1));
+    phases.push(mk("supervisor",   start, projEnd, 1));
+    phases.push(mk("art_director", start, projEnd, 1));
+    phases.push(mk("coordinator",  start, projEnd, 1));
+    if (project.videoType === "3D 애니메이션") {
+      phases.push(mk("sub_director", start, projEnd, 1));
+    }
   }
 
   // Preprod: design & storyboard in parallel
