@@ -357,6 +357,16 @@ function ProjectInfoTab({project, onChange}) {
             <option value="">선택하세요</option>
             {VIDEO_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
           </FSelect>
+          <label style={{display:"flex",alignItems:"center",gap:12,gridColumn:"1 / -1",padding:"12px 16px",borderRadius:10,border:`2px solid ${project.isUnreal?"#7C3AED":"#E5E7EB"}`,background:project.isUnreal?"#7C3AED11":"#F8F9FA",cursor:"pointer",transition:"all 0.15s"}}
+            onClick={()=>onChange("isUnreal",!project.isUnreal)}>
+            <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${project.isUnreal?"#7C3AED":"#D1D5DB"}`,background:project.isUnreal?"#7C3AED":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+              {project.isUnreal && <span style={{color:"#fff",fontSize:14,fontWeight:900,lineHeight:1}}>✓</span>}
+            </div>
+            <div>
+              <div style={{fontSize:14,fontWeight:700,color:project.isUnreal?"#7C3AED":"#374151"}}>🎮 Unreal Engine 프로젝트</div>
+              <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>체크 시 자동 계산에 Unreal 단계가 포함됩니다</div>
+            </div>
+          </label>
           <label style={{display:"flex",flexDirection:"column",gap:6,gridColumn:"1 / -1"}}>
             <span style={{fontSize:12,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em"}}>프로젝트 설명</span>
             <textarea value={project.description} onChange={e=>onChange("description",e.target.value)} rows={3} placeholder="프로젝트 개요 및 요구사항"
@@ -1222,7 +1232,7 @@ function InternalStaffTab({internalStaff, onChange}) {
 }
 
 /* ── 메인 앱 (로그인 없음) ───────────────────────────────────────────── */
-const DEFAULT_PROJECT = {name:"",client:"",manager:"",startDate:"",deadline:"",videoType:"",description:"",duration:"",resolution:"1920x1080",format:"mp4_h264",revisions:"3",music:"",subtitle:"",fps:"24",qualityGrade:"A",charS:"0",charA:"1",charB:"0",propS:"0",propA:"0",propB:"0",bgS:"0",bgA:"1",bgB:"0"};
+const DEFAULT_PROJECT = {name:"",client:"",manager:"",startDate:"",deadline:"",videoType:"",description:"",duration:"",resolution:"1920x1080",format:"mp4_h264",revisions:"3",music:"",subtitle:"",fps:"24",qualityGrade:"A",charS:"0",charA:"1",charB:"0",propS:"0",propA:"0",propB:"0",bgS:"0",bgA:"1",bgB:"0",isUnreal:false};
 const DEFAULT_SCHEDULE = {phases:[],note:""};
 const DEFAULT_QUOTE    = {items:[],discountPct:0,includeVat:true};
 
@@ -1418,30 +1428,30 @@ const DEFAULT_STANDARDS_ANIMATION = {
     {id:"sim_a_30",cat:"시뮬레이션",q:"A",res:"",fps:30,spw:6.93, hc:1},
     {id:"sim_b_24",cat:"시뮬레이션",q:"B",res:"",fps:24,spw:12,   hc:1},
     {id:"sim_b_30",cat:"시뮬레이션",q:"B",res:"",fps:30,spw:10.53,hc:1},
-    {id:"ur_s_fhd_24",cat:"언리얼",q:"S",res:"FHD",fps:24,spw:5.33,hc:1},
-    {id:"ur_s_fhd_30",cat:"언리얼",q:"S",res:"FHD",fps:30,spw:4,   hc:1},
-    {id:"ur_s_4k_24", cat:"언리얼",q:"S",res:"4K", fps:24,spw:4,   hc:1},
-    {id:"ur_s_4k_30", cat:"언리얼",q:"S",res:"4K", fps:30,spw:2.67,hc:1},
-    {id:"ur_a_fhd_24",cat:"언리얼",q:"A",res:"FHD",fps:24,spw:8,   hc:1},
-    {id:"ur_a_fhd_30",cat:"언리얼",q:"A",res:"FHD",fps:30,spw:5.33,hc:1},
-    {id:"ur_a_4k_24", cat:"언리얼",q:"A",res:"4K", fps:24,spw:6.67,hc:1},
-    {id:"ur_a_4k_30", cat:"언리얼",q:"A",res:"4K", fps:30,spw:4,   hc:1},
-    {id:"ur_b_fhd_24",cat:"언리얼",q:"B",res:"FHD",fps:24,spw:12,  hc:1},
-    {id:"ur_b_fhd_30",cat:"언리얼",q:"B",res:"FHD",fps:30,spw:9.33,hc:1},
-    {id:"ur_b_4k_24", cat:"언리얼",q:"B",res:"4K", fps:24,spw:9.33,hc:1},
-    {id:"ur_b_4k_30", cat:"언리얼",q:"B",res:"4K", fps:30,spw:6.67,hc:1},
-    {id:"mg_s_fhd_24",cat:"모션그래픽",q:"S",res:"FHD",fps:24,spw:5.33,hc:1},
-    {id:"mg_s_fhd_30",cat:"모션그래픽",q:"S",res:"FHD",fps:30,spw:4,   hc:1},
-    {id:"mg_s_4k_24", cat:"모션그래픽",q:"S",res:"4K", fps:24,spw:4,   hc:1},
-    {id:"mg_s_4k_30", cat:"모션그래픽",q:"S",res:"4K", fps:30,spw:2.67,hc:1},
-    {id:"mg_a_fhd_24",cat:"모션그래픽",q:"A",res:"FHD",fps:24,spw:8,   hc:1},
-    {id:"mg_a_fhd_30",cat:"모션그래픽",q:"A",res:"FHD",fps:30,spw:5.33,hc:1},
-    {id:"mg_a_4k_24", cat:"모션그래픽",q:"A",res:"4K", fps:24,spw:6.67,hc:1},
-    {id:"mg_a_4k_30", cat:"모션그래픽",q:"A",res:"4K", fps:30,spw:4,   hc:1},
-    {id:"mg_b_fhd_24",cat:"모션그래픽",q:"B",res:"FHD",fps:24,spw:12,  hc:1},
-    {id:"mg_b_fhd_30",cat:"모션그래픽",q:"B",res:"FHD",fps:30,spw:9.33,hc:1},
-    {id:"mg_b_4k_24", cat:"모션그래픽",q:"B",res:"4K", fps:24,spw:9.33,hc:1},
-    {id:"mg_b_4k_30", cat:"모션그래픽",q:"B",res:"4K", fps:30,spw:6.67,hc:1},
+    {id:"ur_s_fhd_24",cat:"언리얼",q:"S",res:"FHD",fps:24,spw:4,  hc:0.75},
+    {id:"ur_s_fhd_30",cat:"언리얼",q:"S",res:"FHD",fps:30,spw:3,  hc:0.75},
+    {id:"ur_s_4k_24", cat:"언리얼",q:"S",res:"4K", fps:24,spw:3,  hc:0.75},
+    {id:"ur_s_4k_30", cat:"언리얼",q:"S",res:"4K", fps:30,spw:2,  hc:0.75},
+    {id:"ur_a_fhd_24",cat:"언리얼",q:"A",res:"FHD",fps:24,spw:6,  hc:0.75},
+    {id:"ur_a_fhd_30",cat:"언리얼",q:"A",res:"FHD",fps:30,spw:4,  hc:0.75},
+    {id:"ur_a_4k_24", cat:"언리얼",q:"A",res:"4K", fps:24,spw:5,  hc:0.75},
+    {id:"ur_a_4k_30", cat:"언리얼",q:"A",res:"4K", fps:30,spw:3,  hc:0.75},
+    {id:"ur_b_fhd_24",cat:"언리얼",q:"B",res:"FHD",fps:24,spw:9,  hc:0.75},
+    {id:"ur_b_fhd_30",cat:"언리얼",q:"B",res:"FHD",fps:30,spw:7,  hc:0.75},
+    {id:"ur_b_4k_24", cat:"언리얼",q:"B",res:"4K", fps:24,spw:7,  hc:0.75},
+    {id:"ur_b_4k_30", cat:"언리얼",q:"B",res:"4K", fps:30,spw:5,  hc:0.75},
+    {id:"mg_s_fhd_24",cat:"모션그래픽",q:"S",res:"FHD",fps:24,spw:4,  hc:0.75},
+    {id:"mg_s_fhd_30",cat:"모션그래픽",q:"S",res:"FHD",fps:30,spw:3,  hc:0.75},
+    {id:"mg_s_4k_24", cat:"모션그래픽",q:"S",res:"4K", fps:24,spw:3,  hc:0.75},
+    {id:"mg_s_4k_30", cat:"모션그래픽",q:"S",res:"4K", fps:30,spw:2,  hc:0.75},
+    {id:"mg_a_fhd_24",cat:"모션그래픽",q:"A",res:"FHD",fps:24,spw:6,  hc:0.75},
+    {id:"mg_a_fhd_30",cat:"모션그래픽",q:"A",res:"FHD",fps:30,spw:4,  hc:0.75},
+    {id:"mg_a_4k_24", cat:"모션그래픽",q:"A",res:"4K", fps:24,spw:5,  hc:0.75},
+    {id:"mg_a_4k_30", cat:"모션그래픽",q:"A",res:"4K", fps:30,spw:3,  hc:0.75},
+    {id:"mg_b_fhd_24",cat:"모션그래픽",q:"B",res:"FHD",fps:24,spw:9,  hc:0.75},
+    {id:"mg_b_fhd_30",cat:"모션그래픽",q:"B",res:"FHD",fps:30,spw:7,  hc:0.75},
+    {id:"mg_b_4k_24", cat:"모션그래픽",q:"B",res:"4K", fps:24,spw:7,  hc:0.75},
+    {id:"mg_b_4k_30", cat:"모션그래픽",q:"B",res:"4K", fps:30,spw:5,  hc:0.75},
   ]
 };
 
@@ -1549,13 +1559,15 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const OL = 0.8;
   const ol0 = d => Math.round(d * OL);
 
+  const useUnreal = !!project.isUnreal;
+
   // Critical path with overlaps:
-  // preprod → (modeling OL) → (max(rig,ld) OL) → (anim OL) → (max(lr,fx,sim,unreal,mg) OL) → comp
+  // preprod → (modeling OL) → (max(rig,ld) OL) → (anim OL) → (max(lr,fx,sim,[unreal],mg) OL) → comp
   const critical0 = prepDays0
                   + ol0(modelDays0)
                   + ol0(Math.max(rigDays0, ldDays0))
                   + ol0(anDays0)
-                  + ol0(Math.max(lrDays0, fxDays0, simDays0, unrealDays0, mgDays0))
+                  + ol0(Math.max(lrDays0, fxDays0, simDays0, useUnreal ? unrealDays0 : 0, mgDays0))
                   + coDays0;
 
   // Scale to fit within deadline
@@ -1615,8 +1627,8 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const unrealEnd    = addDays(fxSimLrStart, unrealDays);
   const mgEnd        = addDays(fxSimLrStart, mgDays);
 
-  // Composition: starts when max(lr, fx, sim, unreal, mg) is OL done
-  const coStart    = addDays(fxSimLrStart, ol(Math.max(lrDays, fxDays, simDays, unrealDays, mgDays)));
+  // Composition: starts when max(lr, fx, sim, [unreal], mg) is OL done
+  const coStart    = addDays(fxSimLrStart, ol(Math.max(lrDays, fxDays, simDays, useUnreal ? unrealDays : 0, mgDays)));
   const coEnd      = addDays(coStart, coDays);
 
   const projEnd = deadline || coEnd;
@@ -1647,11 +1659,11 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   if (lrDays     > 0) phases.push(mk("lighting_render",  fxSimLrStart, lrEnd,     lrHC));
   if (fxDays     > 0) phases.push(mk("fx",               fxSimLrStart, fxEnd,     fxHC));
   if (simDays    > 0) phases.push(mk("simulation",       fxSimLrStart, simEnd,    simHC));
-  if (unrealDays > 0) phases.push(mk("unreal",           fxSimLrStart, unrealEnd, unrealHC));
+  if (useUnreal && unrealDays > 0) phases.push(mk("unreal", fxSimLrStart, unrealEnd, unrealHC));
   if (mgDays     > 0) phases.push(mk("motion_graphic",   fxSimLrStart, mgEnd,     mgHC));
   if (coDays     > 0) phases.push(mk("composition",      coStart,      coEnd,     coHC));
 
-  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC,unreal:unrealHC,mg:mgHC};
+  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC,unreal:useUnreal?unrealHC:0,mg:mgHC};
   return {phases, headcounts};
 }
 
