@@ -136,7 +136,11 @@ function syncQuoteFromSchedule(schedulePhases, quoteItems) {
     const phase = schedulePhases.find(p=>p.phaseId===linkedPhaseId);
     if (!phase?.startDate || !phase?.endDate) return item;
     const days = daysBetween(phase.startDate, phase.endDate);
-    return days > 0 ? {...item, days} : item;
+    const hcMatch = phase.assignee?.match(/^(\d+)명$/);
+    const updates = {};
+    if (days > 0) updates.days = days;
+    if (hcMatch) updates.headcount = Number(hcMatch[1]);
+    return Object.keys(updates).length ? {...item, ...updates} : item;
   });
   // Auto-add quote items for newly added phases
   const newItems = [];
@@ -572,10 +576,24 @@ function GanttChart({phases, ganttStart, ganttEnd, onUpdate}) {
 }
 
 /* ── 스케줄 탭 ────────────────────────────────────────────────────────── */
-function ScheduleTab({schedule, onChange, project, projectStart, ganttStart, setGanttStart, ganttEnd, setGanttEnd, onAutoCalc}) {
+function ScheduleTab({schedule, onChange, project, standards, projectStart, ganttStart, setGanttStart, ganttEnd, setGanttEnd, onAutoCalc}) {
 
   const updatePhase     = (id,f,v) => onChange("phases", schedule.phases.map(p=>p.id===id?{...p,[f]:v}:p));
-  const updatePhaseDates = (id,s,e) => onChange("phases", schedule.phases.map(p=>p.id===id?{...p,startDate:s,endDate:e}:p));
+  const updatePhaseDates = (id, s, e) => {
+    const dur = Math.max(1, daysBetween(s, e));
+    const wvs = (standards && project) ? calcWorkVolumes(project, standards) : {};
+    const newPhases = schedule.phases.map(p => {
+      if (p.id !== id) return p;
+      const wv = wvs[p.phaseId];
+      if (wv && wv.work > 0) {
+        const raw = Math.max(1, Math.ceil(wv.work / dur));
+        const hc  = (wv.maxHC > 0) ? Math.min(raw, wv.maxHC) : raw;
+        return {...p, startDate: s, endDate: e, assignee: `${hc}명`};
+      }
+      return {...p, startDate: s, endDate: e};
+    });
+    onChange("phases", newPhases);
+  };
   const removePhase     = id => onChange("phases", schedule.phases.filter(p=>p.id!==id));
   const addPhase        = (catId,phaseId) => onChange("phases", [...schedule.phases, {id:Date.now(),phaseId,startDate:ganttStart,endDate:addDays(ganttStart,14),assignee:""}]);
 
@@ -1469,6 +1487,65 @@ const DEFAULT_INTERNAL_STAFF = {
   lighting_render:12, fx_artist:4, motion_graphic_artist:1, unreal_artist:2, compositor:4, simulator:4,
 };
 
+/* ── 작업량 계산 (수동 조정 시 HC 역산용) ──────────────────────────────── */
+function calcWorkVolumes(project, standards) {
+  if (!project || !standards) return {};
+  const q = project.qualityGrade || "A";
+  const fps = Number(project.fps) || 24;
+  const res = (project.resolution||"").includes("3840") ? "4K" : "FHD";
+  const totalSecs = Number(project.duration) || 0;
+  let charS=Number(project.charS)||0, charA=Number(project.charA)||0, charB=Number(project.charB)||0;
+  let propS=Number(project.propS)||0, propA=Number(project.propA)||0, propB=Number(project.propB)||0;
+  let bgS=Number(project.bgS)||0, bgA=Number(project.bgA)||0, bgB=Number(project.bgB)||0;
+  if (charS+charA+charB+propS+propA+propB+bgS+bgA+bgB === 0) {
+    const oc=Number(project.charCount)||0, op=Number(project.propCount)||0, ob=Number(project.bgCount)||0;
+    if (oc+op+ob > 0) {
+      if (q==="S") { charS+=oc; propS+=op; bgS+=ob; }
+      else if (q==="B") { charB+=oc; propB+=op; bgB+=ob; }
+      else { charA+=oc; propA+=op; bgA+=ob; }
+    }
+  }
+  const fa = (cat, item, qual, resolution) =>
+    (standards.asset||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual&&(!resolution||s.res===resolution));
+  const fp = (cat, qual, fpsVal, resolution) =>
+    (standards.production||[]).find(s=>s.cat===cat&&s.q===qual&&s.fps===fpsVal&&(!resolution||s.res===resolution));
+
+  const modelWork = charS*(fa("모델링","캐릭터 1종","S")?.days||0) + charA*(fa("모델링","캐릭터 1종","A")?.days||0) + charB*(fa("모델링","캐릭터 1종","B")?.days||0)
+                  + propS*(fa("모델링","프랍 1종","S")?.days||0)   + propA*(fa("모델링","프랍 1종","A")?.days||0)   + propB*(fa("모델링","프랍 1종","B")?.days||0)
+                  + bgS*(fa("모델링","배경 1종","S")?.days||0)     + bgA*(fa("모델링","배경 1종","A")?.days||0)     + bgB*(fa("모델링","배경 1종","B")?.days||0);
+  const ldWork    = charS*(fa("룩댑","캐릭터 1종","S",res)?.days||0) + charA*(fa("룩댑","캐릭터 1종","A",res)?.days||0) + charB*(fa("룩댑","캐릭터 1종","B",res)?.days||0)
+                  + bgS*(fa("룩댑","배경 1종","S",res)?.days||0)     + bgA*(fa("룩댑","배경 1종","A",res)?.days||0)     + bgB*(fa("룩댑","배경 1종","B",res)?.days||0);
+  const rigWork   = charS*(fa("리깅","캐릭터 1종","S")?.days||0) + charA*(fa("리깅","캐릭터 1종","A")?.days||0) + charB*(fa("리깅","캐릭터 1종","B")?.days||0)
+                  + propS*(fa("리깅","프랍 1종","S")?.days||0)   + propA*(fa("리깅","프랍 1종","A")?.days||0)   + propB*(fa("리깅","프랍 1종","B")?.days||0);
+
+  const anSpw    = fp("애니메이션",q,fps)?.spw        || 1;
+  const lrSpw    = fp("라이팅&렌더",q,fps,res)?.spw   || 1;
+  const fxSpw    = fp("FX",q,fps)?.spw                || 1;
+  const simSpw   = fp("시뮬레이션",q,fps)?.spw         || 1;
+  const coSpw    = fp("합성",q,fps,res)?.spw           || 1;
+  const unrealSpw = fp("언리얼",q,fps,res)?.spw        || lrSpw;
+  const w = spwVal => totalSecs > 0 ? (totalSecs / spwVal) * 7 : 0;
+
+  // Asset-based hard cap: can't assign more people than discrete assets
+  const maxModelHC = (charS+charA+charB) + (propS+propA+propB) + (bgS*4 + bgA*3 + bgB*3);
+  const maxLdHC    = (charS+charA+charB) + (bgS*4 + bgA*3 + bgB*3);
+  const maxRigHC   = (charS+charA+charB) + (propS+propA+propB);
+
+  return {
+    modeling:        {work: modelWork, maxHC: maxModelHC},
+    texture_shading: {work: ldWork,    maxHC: maxLdHC},
+    rigging:         {work: rigWork,   maxHC: maxRigHC},
+    animation_main:  {work: w(anSpw),  maxHC: 0},
+    animation_lead:  {work: w(anSpw),  maxHC: 0},
+    lighting_render: {work: w(lrSpw),  maxHC: 0},
+    lighting_lead:   {work: w(lrSpw),  maxHC: 0},
+    fx:              {work: w(fxSpw),  maxHC: 0},
+    simulation:      {work: w(simSpw), maxHC: 0},
+    composition:     {work: w(coSpw),  maxHC: 0},
+    unreal:          {work: w(unrealSpw), maxHC: 0},
+  };
+}
+
 /* ── 자동 스케줄 계산 ───────────────────────────────────────────────────── */
 function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const q   = project.qualityGrade || "A";
@@ -1518,20 +1595,22 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const unrealSpw = fp("언리얼",q,fps,res)?.spw       || lrSpw;
   const mgSpw     = fp("모션그래픽",q,fps,res)?.spw   || coSpw;
 
-  // Base headcounts from internal staff
+  // Base headcounts: internal staff, capped by asset-based limits for per-asset phases
   const is = internalStaff || {};
-  const modelHC0  = Math.max(1, is.modeler               || 1);
-  const ldHC0     = Math.max(1, is.texture_shading       || 1);
-  const rigHC0    = Math.max(1, is.rigger                || 1);
+  const wv = calcWorkVolumes(project, standards);
+  const capAsset = (base, maxHC) => maxHC > 0 ? Math.min(base, maxHC) : base;
+
+  const modelHC0  = Math.max(1, capAsset(is.modeler        || 1, wv.modeling?.maxHC        || 0));
+  const ldHC0     = Math.max(1, capAsset(is.texture_shading|| 1, wv.texture_shading?.maxHC || 0));
+  const rigHC0    = Math.max(1, capAsset(is.rigger         || 1, wv.rigging?.maxHC         || 0));
   const anHC0     = Math.max(1, is.animator              || 1);
   const lrHC0     = Math.max(1, is.lighting_render       || 1);
   const fxHC0     = Math.max(1, is.fx_artist             || 1);
   const simHC0    = Math.max(1, is.simulator             || 1);
   const coHC0     = Math.max(1, is.compositor            || 1);
   const unrealHC0 = Math.max(1, is.unreal_artist         || 1);
-  const mgHC0     = Math.max(1, is.motion_graphic_artist || 1);
 
-  // Base durations with internal staff headcounts
+  // Base durations (MG excluded from auto-calc)
   const modelDays0  = modelWork>0 ? Math.ceil(modelWork/modelHC0)             : 0;
   const ldDays0     = ldWork>0    ? Math.ceil(ldWork/ldHC0)                   : 0;
   const rigDays0    = rigWork>0   ? Math.ceil(rigWork/rigHC0)                 : 0;
@@ -1541,7 +1620,6 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const simDays0    = totalSecs>0 ? Math.ceil((totalSecs/simSpw)*7/simHC0)   : 0;
   const coDays0     = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0)     : 0;
   const unrealDays0 = totalSecs>0 ? Math.ceil((totalSecs/unrealSpw)*7/unrealHC0): 0;
-  const mgDays0     = totalSecs>0 ? Math.ceil((totalSecs/mgSpw)*7/mgHC0)     : 0;
 
   // Preprod: use preproduction standards if available, else estimate ~25% of modeling
   const fpd = (cat, item, qual) => (standards.preproduction||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual);
@@ -1568,7 +1646,6 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
                   + ol0(Math.max(rigDays0, ldDays0))
                   + ol0(anDays0)
                   + ol0(Math.max(lrDays0, fxDays0, simDays0, useUnreal ? unrealDays0 : 0))
-                  + ol0(mgDays0)
                   + coDays0;
 
   // If deadline set and schedule exceeds it, scale up headcounts to fit within deadline
@@ -1592,7 +1669,6 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const simDays     = sd(simDays0);
   const coDays      = sd(coDays0);
   const unrealDays  = sd(unrealDays0);
-  const mgDays      = sd(mgDays0);
   const modelHC     = sh(modelHC0);
   const ldHC        = sh(ldHC0);
   const rigHC       = sh(rigHC0);
@@ -1602,7 +1678,6 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const simHC       = sh(simHC0);
   const coHC        = sh(coHC0);
   const unrealHC    = sh(unrealHC0);
-  const mgHC        = sh(mgHC0);
 
   const mk = (phaseId, s, e, hc) => ({id:Date.now()+Math.random(),phaseId,startDate:s,endDate:e,assignee:`${hc}명`});
 
@@ -1628,15 +1703,9 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const simEnd       = addDays(fxSimLrStart, simDays);
   const unrealEnd    = addDays(fxSimLrStart, unrealDays);
 
-  // Motion Graphic: starts after LR finishes (OL factor applied)
-  const mgStart = addDays(fxSimLrStart, ol(lrDays));
-  const mgEnd   = addDays(mgStart, mgDays);
-
-  // Composition: starts when max(lr, fx, sim, [unreal], mg) is OL done
-  const coStart    = addDays(fxSimLrStart, ol(Math.max(lrDays, fxDays, simDays, useUnreal ? unrealDays : 0)));
-  const coStart2   = addDays(mgStart, ol(mgDays));
-  const coStartFinal = coStart > coStart2 ? coStart : coStart2;
-  const coEnd      = addDays(coStartFinal, coDays);
+  // Composition: starts when max(lr, fx, sim, [unreal]) is OL done
+  const coStart = addDays(fxSimLrStart, ol(Math.max(lrDays, fxDays, simDays, useUnreal ? unrealDays : 0)));
+  const coEnd   = addDays(coStart, coDays);
 
   const projEnd = deadline || coEnd;
   // Cap both start and end dates to deadline; skip phase if start >= end after capping
@@ -1674,10 +1743,9 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   if (fxDays   > 0) pushPhase("fx",                fxSimLrStart, fxEnd,    fxHC);
   if (simDays  > 0) pushPhase("simulation",        fxSimLrStart, simEnd,   simHC);
   if (useUnreal && unrealDays > 0) pushPhase("unreal",       fxSimLrStart, unrealEnd, unrealHC);
-  if (mgDays   > 0) pushPhase("motion_graphic",    mgStart,      mgEnd,    mgHC);
-  if (coDays   > 0) pushPhase("composition",       coStartFinal, coEnd,    coHC);
+  if (coDays   > 0) pushPhase("composition",       coStart, coEnd, coHC);
 
-  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC,unreal:useUnreal?unrealHC:0,mg:mgHC};
+  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC,unreal:useUnreal?unrealHC:0};
   return {phases, headcounts};
 }
 
@@ -1850,7 +1918,7 @@ function App() {
 
         {/* 탭 콘텐츠 */}
         {activeTab==="info"      && <ProjectInfoTab project={project} onChange={updateProject} />}
-        {activeTab==="schedule"  && <ScheduleTab schedule={schedule} onChange={updateSchedule} project={project} projectStart={project.startDate} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} onAutoCalc={handleAutoCalc} />}
+        {activeTab==="schedule"  && <ScheduleTab schedule={schedule} onChange={updateSchedule} project={project} standards={allStandards[project.videoType==="3D 애니메이션"?"animation":"cinematic"]} projectStart={project.startDate} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} onAutoCalc={handleAutoCalc} />}
         {activeTab==="quote"     && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={true} />}
         {activeTab==="standards" && <StandardsTab allStandards={allStandards} onChange={setAllStandards} />}
         {activeTab==="staff"     && <InternalStaffTab internalStaff={internalStaff} onChange={setInternalStaff} />}
