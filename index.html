@@ -1620,7 +1620,7 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const fxDays0     = totalSecs>0 ? Math.ceil((totalSecs/fxSpw)*7/fxHC0)     : 0;
   const simDays0    = totalSecs>0 ? Math.ceil((totalSecs/simSpw)*7/simHC0)   : 0;
   const coDays0     = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0)     : 0;
-  const unrealDays0 = totalSecs>0 ? Math.ceil((totalSecs/unrealSpw)*7/unrealHC0): 0;
+  const unrealDays0 = lrDays0; // Unreal runs same duration as LR
 
   // Preprod: use preproduction standards if available, else estimate ~25% of modeling
   const fpd = (cat, item, qual) => (standards.preproduction||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual);
