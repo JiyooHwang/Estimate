@@ -1567,16 +1567,17 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
     }
   }
   const start = projectStartDate || new Date().toISOString().slice(0,10);
-  const deadline = project.deadline || null;
+  // Only enforce deadline if it's actually after the project start date
+  const deadline = (project.deadline && project.deadline > start) ? project.deadline : null;
 
   if (totalSecs === 0 && (charS+charA+charB+propS+propA+propB+bgS+bgA+bgB) === 0) {
     return {phases:[], headcounts:{}};
   }
 
   const fa = (cat, item, qual, resolution) =>
-    standards.asset.find(s=>s.cat===cat&&s.item===item&&s.q===qual&&(!resolution||s.res===resolution));
+    (standards.asset||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual&&(!resolution||s.res===resolution));
   const fp = (cat, qual, fpsVal, resolution) =>
-    standards.production.find(s=>s.cat===cat&&s.q===qual&&s.fps===fpsVal&&(!resolution||s.res===resolution));
+    (standards.production||[]).find(s=>s.cat===cat&&s.q===qual&&s.fps===fpsVal&&(!resolution||s.res===resolution));
 
   // Base work volume summed across all difficulty levels
   const modelWork = charS*(fa("모델링","캐릭터 1종","S")?.days||0) + charA*(fa("모델링","캐릭터 1종","A")?.days||0) + charB*(fa("모델링","캐릭터 1종","B")?.days||0)
@@ -1771,9 +1772,17 @@ function App() {
   const [allStandards, setAllStandards] = useState(() => {
     const mergeStds = (loaded, def) => {
       if (!loaded) return def;
-      const existIds = new Set((loaded.production||[]).map(r=>r.id));
-      const missing = (def.production||[]).filter(r=>!existIds.has(r.id));
-      return missing.length ? {...loaded, production:[...(loaded.production||[]),...missing]} : loaded;
+      const mergeArr = (loadedArr, defArr) => {
+        const ids = new Set((loadedArr||[]).map(r=>r.id));
+        const missing = (defArr||[]).filter(r=>!ids.has(r.id));
+        return missing.length ? [...(loadedArr||[]), ...missing] : (loadedArr||defArr);
+      };
+      return {
+        ...loaded,
+        production:    mergeArr(loaded.production,    def.production),
+        asset:         mergeArr(loaded.asset,         def.asset),
+        preproduction: mergeArr(loaded.preproduction, def.preproduction),
+      };
     };
     try {
       const s=localStorage.getItem("locus_all_standards");
