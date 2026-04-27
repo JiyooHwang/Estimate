@@ -1537,8 +1537,8 @@ function calcWorkVolumes(project, standards) {
     rigging:         {work: rigWork,   maxHC: maxRigHC},
     animation_main:  {work: w(anSpw),  maxHC: 0},
     animation_lead:  {work: w(anSpw),  maxHC: 0},
-    lighting_render: {work: w(lrSpw),  maxHC: 0},
-    lighting_lead:   {work: w(lrSpw),  maxHC: 0},
+    lighting_render: {work: w(lrSpw) * (project.isUnreal ? 0.85 : 1), maxHC: 0},
+    lighting_lead:   {work: w(lrSpw) * (project.isUnreal ? 0.85 : 1), maxHC: 0},
     fx:              {work: w(fxSpw),  maxHC: 0},
     simulation:      {work: w(simSpw), maxHC: 0},
     composition:     {work: w(coSpw),  maxHC: 0},
@@ -1615,7 +1615,8 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   const ldDays0     = ldWork>0    ? Math.ceil(ldWork/ldHC0)                   : 0;
   const rigDays0    = rigWork>0   ? Math.ceil(rigWork/rigHC0)                 : 0;
   const anDays0     = totalSecs>0 ? Math.ceil((totalSecs/anSpw)*7/anHC0)     : 0;
-  const lrDays0     = totalSecs>0 ? Math.ceil((totalSecs/lrSpw)*7/lrHC0)     : 0;
+  const lrMult      = !!project.isUnreal ? 0.85 : 1;
+  const lrDays0     = totalSecs>0 ? Math.ceil((totalSecs/lrSpw)*7/lrHC0 * lrMult) : 0;
   const fxDays0     = totalSecs>0 ? Math.ceil((totalSecs/fxSpw)*7/fxHC0)     : 0;
   const simDays0    = totalSecs>0 ? Math.ceil((totalSecs/simSpw)*7/simHC0)   : 0;
   const coDays0     = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0)     : 0;
