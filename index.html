@@ -1249,6 +1249,143 @@ function InternalStaffTab({internalStaff, onChange}) {
   );
 }
 
+/* ── 팀별 인원 관리 탭 ──────────────────────────────────────────────── */
+function TeamManagementTab({teamData, onChange, year, setYear, projectFilter, setProjectFilter, projects}) {
+  const ensureRow = id => teamData[id] || { base:0, months:Array(12).fill(0) };
+
+  const updateBase = (teamId, val) => {
+    const next = {...teamData};
+    const row = ensureRow(teamId);
+    next[teamId] = { ...row, base: Number(val) || 0 };
+    onChange(next);
+  };
+  const updateMonth = (teamId, monthIdx, val) => {
+    const next = {...teamData};
+    const row = ensureRow(teamId);
+    const months = [...row.months];
+    months[monthIdx] = val === "" ? 0 : Number(val);
+    next[teamId] = { ...row, months };
+    onChange(next);
+  };
+
+  const cellStyle = v => {
+    const n = Number(v) || 0;
+    if (n > 0) return { background:"#FEE2E2", color:"#DC2626" };
+    if (n < 0) return { background:"#DBEAFE", color:"#2563EB" };
+    return { background:"#F3F4F6", color:"#9CA3AF" };
+  };
+  const fmtCell = v => {
+    const n = Number(v) || 0;
+    if (n === 0) return "0.0";
+    return n.toFixed(1);
+  };
+
+  const monthlyTotal = Array(12).fill(0);
+  TEAM_GROUPS.forEach(g => {
+    const row = ensureRow(g.id);
+    row.months.forEach((v,i) => { monthlyTotal[i] += Number(v) || 0; });
+  });
+
+  const th = {padding:"6px 8px",fontSize:11,fontWeight:700,color:"#fff",background:"#374151",border:"1px solid #1F2937",textAlign:"center"};
+  const subTh = {padding:"4px 6px",fontSize:11,fontWeight:600,color:"#6B7280",background:"#F4F5F7",border:"1px solid #E5E7EB",textAlign:"center"};
+  const td = {padding:"4px 6px",fontSize:12,border:"1px solid #E5E7EB",textAlign:"center"};
+  const teamCellTd = (color) => ({...td,background:color,fontWeight:700,color:"#1F2937",textAlign:"center",padding:"6px 10px"});
+
+  const yearOptions = [];
+  for (let y = 2024; y <= 2030; y++) yearOptions.push(y);
+
+  return (
+    <div className="no-print" style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:12}}>
+          <div>
+            <h3 style={{margin:"0 0 4px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>👥 팀별 인원 관리</h3>
+            <p style={{fontSize:12,color:"#6B7280",margin:0}}>월별 팀 인원 변동을 입력합니다. 양수=충원, 음수=감원. (PDF 미출력)</p>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <label style={{display:"flex",flexDirection:"column",gap:4}}>
+              <span style={{fontSize:10,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em"}}>Year</span>
+              <select value={year} onChange={e=>setYear(Number(e.target.value))} style={{background:"#FEF08A",border:"1px solid #CA8A04",borderRadius:8,padding:"6px 12px",fontSize:18,fontWeight:900,color:"#1F2937",outline:"none",cursor:"pointer"}}>
+                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:4}}>
+              <span style={{fontSize:10,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em"}}>Project</span>
+              <select value={projectFilter} onChange={e=>setProjectFilter(e.target.value)} style={{background:"#FEF08A",border:"1px solid #CA8A04",borderRadius:8,padding:"6px 12px",fontSize:14,fontWeight:700,color:"#1F2937",outline:"none",cursor:"pointer",minWidth:120}}>
+                <option value="ALL">ALL</option>
+                {(projects||[]).map(p => <option key={p.id} value={p.id}>{p.project?.name || "무제 프로젝트"}</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div style={{overflowX:"auto"}}>
+          <table style={{borderCollapse:"collapse",fontSize:12,minWidth:"100%"}}>
+            <thead>
+              <tr>
+                <th rowSpan={2} style={{...th,minWidth:180,textAlign:"left",paddingLeft:14}}>팀</th>
+                <th rowSpan={2} style={{...th,minWidth:180,textAlign:"left",paddingLeft:14}}>역할</th>
+                <th rowSpan={2} style={{...th,minWidth:80}}>팀 인원</th>
+                <th colSpan={12} style={{...th,background:"#1F2937"}}>{year}</th>
+              </tr>
+              <tr>
+                {Array.from({length:12}, (_,i) => (
+                  <th key={i} style={{...subTh,minWidth:60}}>{i+1}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {TEAM_GROUPS.map(g => {
+                const row = ensureRow(g.id);
+                return (
+                  <tr key={g.id}>
+                    <td style={teamCellTd(g.teamColor)}>{g.team}</td>
+                    <td style={teamCellTd(g.roleColor)}>{g.role}</td>
+                    <td style={{...td,padding:"2px 4px",background:"#F9FAFB"}}>
+                      <input type="number" value={row.base||""} placeholder="0"
+                        onChange={e=>updateBase(g.id, e.target.value)}
+                        style={{width:"100%",textAlign:"center",background:"transparent",border:"none",fontSize:13,fontWeight:700,outline:"none",color:"#1F2937"}} />
+                    </td>
+                    {row.months.map((v, mi) => {
+                      const cs = cellStyle(v);
+                      return (
+                        <td key={mi} style={{...td,padding:0,...cs}}>
+                          <input type="number" step="0.5" value={v===0?"":v}
+                            onChange={e=>updateMonth(g.id, mi, e.target.value)}
+                            placeholder={fmtCell(v)}
+                            style={{width:"100%",textAlign:"center",background:"transparent",border:"none",padding:"6px 4px",fontSize:12,fontWeight:600,outline:"none",color:cs.color}} />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+              <tr>
+                <td colSpan={2} style={{...td,background:"#9CA3AF",color:"#fff",fontWeight:800,textAlign:"center",padding:"8px 10px",letterSpacing:"0.1em"}}>합계</td>
+                <td style={{...td,background:"#9CA3AF",color:"#fff",fontWeight:800}}>
+                  {TEAM_GROUPS.reduce((acc,g)=>acc + (Number(ensureRow(g.id).base)||0), 0)}
+                </td>
+                {monthlyTotal.map((v, i) => {
+                  const cs = cellStyle(v);
+                  return (
+                    <td key={i} style={{...td,...cs,fontWeight:800}}>{fmtCell(v)}</td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{marginTop:14,fontSize:11,color:"#9CA3AF",display:"flex",gap:16,flexWrap:"wrap"}}>
+          <span>※ 팀 인원: 현재 베이스 인원 수</span>
+          <span>※ 월별 셀: 해당 월의 인원 변동 (양수=충원, 음수=감원)</span>
+          <span>※ 입력값은 자동 저장됩니다.</span>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 /* ── 메인 앱 (로그인 없음) ───────────────────────────────────────────── */
 const DEFAULT_PROJECT = {name:"",client:"",manager:"",startDate:"",deadline:"",videoType:"",description:"",duration:"",resolution:"1920x1080",format:"mp4_h264",revisions:"3",music:"",subtitle:"",fps:"24",qualityGrade:"A",charS:"0",charA:"1",charB:"0",propS:"0",propA:"0",propB:"0",bgS:"0",bgA:"1",bgB:"0",isUnreal:false};
 const DEFAULT_SCHEDULE = {phases:[],note:""};
@@ -1486,6 +1623,35 @@ const DEFAULT_INTERNAL_STAFF = {
   modeler:12, texture_shading:7, rigger:4, animator:10,
   lighting_render:12, fx_artist:4, motion_graphic_artist:1, unreal_artist:2, compositor:4, simulator:4,
 };
+
+/* ── 팀별 인원 관리 ──────────────────────────────────────────────────── */
+const TEAM_GROUPS = [
+  { id:"vp",          team:"부사장/본부장",                role:"",                     teamColor:"#E5E7EB", roleColor:"#E5E7EB" },
+  { id:"global",      team:"글로벌 사업 개발실",            role:"",                     teamColor:"#E5E7EB", roleColor:"#E5E7EB" },
+  { id:"ip_biz",      team:"IP사업실",                    role:"",                     teamColor:"#E5E7EB", roleColor:"#E5E7EB" },
+  { id:"ip_strategy", team:"IP전략실",                    role:"",                     teamColor:"#E5E7EB", roleColor:"#E5E7EB" },
+  { id:"producer",    team:"Producer실",                  role:"피디 / 코디네이터",       teamColor:"#D1D5DB", roleColor:"#D1D5DB" },
+  { id:"supervisor",  team:"Supervisor실",                role:"수퍼바이저",              teamColor:"#67E8F9", roleColor:"#67E8F9" },
+  { id:"sd_dr",       team:"Story Development팀 DR",       role:"감독 / 연출",            teamColor:"#86EFAC", roleColor:"#86EFAC" },
+  { id:"sd_story",    team:"Story Development팀 Story",    role:"구성안 & 시나리오",       teamColor:"#FDE68A", roleColor:"#FDE68A" },
+  { id:"sd_sb",       team:"Story Development팀 SB",       role:"스토리보드 & 애니메틱",    teamColor:"#FBCFE8", roleColor:"#FBCFE8" },
+  { id:"visual_dev",  team:"Visual Development팀",         role:"디자인 & 컬러키",         teamColor:"#FDBA74", roleColor:"#FDBA74" },
+  { id:"modeling",    team:"Modeling팀",                  role:"모델링",                 teamColor:"#5EEAD4", roleColor:"#5EEAD4" },
+  { id:"lookdev",     team:"Look Development팀",           role:"룩디벨롭",                teamColor:"#D9F99D", roleColor:"#D9F99D" },
+  { id:"cfx",         team:"CFX팀",                       role:"리깅",                   teamColor:"#FBCFE8", roleColor:"#FBCFE8" },
+  { id:"animation",   team:"Animation팀",                  role:"애니메이션",              teamColor:"#A78BFA", roleColor:"#A78BFA" },
+  { id:"simulation",  team:"Simulation팀",                 role:"Simulation",            teamColor:"#16A34A", roleColor:"#16A34A" },
+  { id:"blender",     team:"Blender팀",                   role:"Blender",               teamColor:"#F59E0B", roleColor:"#F59E0B" },
+  { id:"fx",          team:"FX팀",                        role:"이펙트",                 teamColor:"#FBCFE8", roleColor:"#FBCFE8" },
+  { id:"lighting",    team:"Lighting팀",                  role:"라이팅 & 렌더",           teamColor:"#3B82F6", roleColor:"#3B82F6" },
+  { id:"composite",   team:"Composite팀",                 role:"합성 / 모션그래픽",        teamColor:"#FB923C", roleColor:"#FB923C" },
+  { id:"unreal",      team:"Unreal팀",                    role:"언리얼 TA/TD",            teamColor:"#F9A8D4", roleColor:"#F9A8D4" },
+];
+
+const DEFAULT_TEAM_DATA = TEAM_GROUPS.reduce((acc,g)=>{
+  acc[g.id] = { base:0, months:Array(12).fill(0) };
+  return acc;
+},{});
 
 /* ── 작업량 계산 (수동 조정 시 HC 역산용) ──────────────────────────────── */
 function calcWorkVolumes(project, standards) {
@@ -1756,6 +1922,7 @@ const TABS = [
   {id:"quote",     label:"견적",          icon:"💰"},
   {id:"standards", label:"기준표",        icon:"📋"},
   {id:"staff",     label:"내부인원",      icon:"👥"},
+  {id:"team",      label:"팀별 인원",     icon:"🏢"},
   {id:"summary",   label:"요약",          icon:"📊"}
 ];
 
@@ -1794,6 +1961,24 @@ function App() {
     return DEFAULT_INTERNAL_STAFF;
   });
   useEffect(()=>{ try{localStorage.setItem("locus_internal_staff",JSON.stringify(internalStaff));}catch{} },[internalStaff]);
+
+  const [teamYear, setTeamYear] = useState(() => {
+    try { const s=localStorage.getItem("locus_team_year"); if(s) return Number(s)||new Date().getFullYear(); } catch{}
+    return new Date().getFullYear();
+  });
+  useEffect(()=>{ try{localStorage.setItem("locus_team_year",String(teamYear));}catch{} },[teamYear]);
+
+  const [teamProjectFilter, setTeamProjectFilter] = useState("ALL");
+
+  const [teamDataByYear, setTeamDataByYear] = useState(() => {
+    try { const s=localStorage.getItem("locus_team_data"); if(s) return JSON.parse(s); } catch{}
+    return {};
+  });
+  useEffect(()=>{ try{localStorage.setItem("locus_team_data",JSON.stringify(teamDataByYear));}catch{} },[teamDataByYear]);
+
+  const teamDataKey = `${teamYear}_${teamProjectFilter}`;
+  const teamData = teamDataByYear[teamDataKey] || DEFAULT_TEAM_DATA;
+  const setTeamData = (next) => setTeamDataByYear(prev => ({...prev, [teamDataKey]: next}));
 
   useEffect(() => { if (project.deadline) setGanttEnd(project.deadline); }, [project.deadline]);
 
@@ -1923,6 +2108,7 @@ function App() {
         {activeTab==="quote"     && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={true} />}
         {activeTab==="standards" && <StandardsTab allStandards={allStandards} onChange={setAllStandards} />}
         {activeTab==="staff"     && <InternalStaffTab internalStaff={internalStaff} onChange={setInternalStaff} />}
+        {activeTab==="team"      && <TeamManagementTab teamData={teamData} onChange={setTeamData} year={teamYear} setYear={setTeamYear} projectFilter={teamProjectFilter} setProjectFilter={setTeamProjectFilter} projects={projects} />}
         {activeTab==="summary"   && <SummaryTab project={project} schedule={schedule} quote={quote} />}
 
         {/* 하단 네비게이션 */}
