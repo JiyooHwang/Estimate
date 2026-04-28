@@ -634,7 +634,7 @@ function ScheduleTab({schedule, onChange, project, standards, projectStart, gant
             <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
               <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B7280"}}>시작 <input type="date" value={ganttStart} onChange={e=>setGanttStart(e.target.value)} style={dateInS} /></label>
               <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B7280"}}>종료 <input type="date" value={ganttEnd} onChange={e=>setGanttEnd(e.target.value)} style={dateInS} /></label>
-              <button onClick={onAutoCalc} style={{background:"#C8102E",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>⚡ 자동 설정</button>
+              <button onClick={onAutoCalc} style={{background:"#C8102E",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>⚡ 자동 계산</button>
             </div>
           </div>
           {schedule.phases.length===0
@@ -1243,7 +1243,7 @@ function InternalStaffTab({internalStaff, onChange}) {
             </tbody>
           </table>
         </div>
-        <div style={{marginTop:14,fontSize:11,color:"#9CA3AF"}}>※ 설정한 인원 수는 자동 저장됩니다. ⚡ 자동 설정 버튼을 누를 때 반영됩니다.</div>
+        <div style={{marginTop:14,fontSize:11,color:"#9CA3AF"}}>※ 설정한 인원 수는 자동 저장됩니다. ⚡ 자동 계산 버튼을 누를 때 반영됩니다.</div>
       </Card>
     </div>
   );
