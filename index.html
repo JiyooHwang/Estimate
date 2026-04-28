@@ -457,7 +457,7 @@ function ProjectInfoTab({project, onChange}) {
 function GanttChart({phases, ganttStart, ganttEnd, onUpdate}) {
   const containerRef = useRef(null);
   const dragRef = useRef(null);
-  const totalDays = daysBetween(ganttStart, ganttEnd) || 1;
+  const totalDays = Math.max(1, daysBetween(ganttStart, ganttEnd));
 
   const months = [];
   let cur = new Date(ganttStart);
@@ -1804,7 +1804,12 @@ function App() {
   });
   useEffect(()=>{ try{localStorage.setItem("locus_internal_staff",JSON.stringify(internalStaff));}catch{} },[internalStaff]);
 
-  useEffect(() => { if (project.deadline) setGanttEnd(project.deadline); }, [project.deadline]);
+  useEffect(() => {
+    if (project.deadline) {
+      const st = project.startDate || new Date().toISOString().slice(0,10);
+      if (project.deadline > st) setGanttEnd(project.deadline);
+    }
+  }, [project.deadline, project.startDate]);
 
   const updateProject  = useCallback((f,v)=>setProject(p=>({...p,[f]:v})),[]);
   const updateSchedule = useCallback((f,v)=>{
@@ -1823,7 +1828,9 @@ function App() {
     const {phases, headcounts} = calcAutoSchedule(project, activeStds, start, internalStaff);
     if (phases.length===0) { alert("프로젝트 정보(총 길이, 캐릭터 수 등)를 먼저 입력하세요."); return; }
     setSchedule(prev=>({...prev, phases}));
-    if (project.deadline) setGanttEnd(project.deadline);
+    const lastEnd = phases.reduce((mx, p) => p.endDate > mx ? p.endDate : mx, start);
+    const newEnd  = (project.deadline && project.deadline > lastEnd) ? project.deadline : addDays(lastEnd, 7);
+    setGanttEnd(newEnd);
     setGanttStart(start);
     setQuote(q=>({...q, items: syncQuoteFromSchedule(phases, q.items).map(item=>{
       const roleId = item.roleId;
