@@ -1768,6 +1768,25 @@ function calcSimilarity(ref, cur) {
   return score;
 }
 
+function calcMarkupFactor(matches) {
+  const TARGET_MARGIN = 25; // 목표 이익률 25%
+  const withData = matches.filter(m => Number(m.ref.totalAmount) > 0 && Number(m.ref.actualCost) > 0);
+  if (!withData.length) return { factor: 1.0, avgMargin: null, upliftPct: 0 };
+
+  let wSum = 0, wMargin = 0;
+  withData.forEach(({ref, score}) => {
+    const margin = (Number(ref.totalAmount) - Number(ref.actualCost)) / Number(ref.totalAmount) * 100;
+    wMargin += margin * score;
+    wSum += score;
+  });
+  const avgMargin = Math.round(wMargin / wSum);
+  if (avgMargin >= TARGET_MARGIN) return { factor: 1.0, avgMargin, upliftPct: 0 };
+
+  const shortfall = TARGET_MARGIN - avgMargin;
+  const upliftPct = Math.round(Math.min(shortfall * 0.8, 40)); // 최대 40%
+  return { factor: 1 + upliftPct / 100, avgMargin, upliftPct };
+}
+
 /* ── 레퍼런스 탭 ──────────────────────────────────────────────────────── */
 const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",productionDays:"",clientDifficulty:"보통",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",actualCost:"",videoUrl:"",notes:""};
 
@@ -2124,7 +2143,9 @@ function App() {
   useEffect(()=>{ try{localStorage.setItem("locus_references",JSON.stringify(referenceProjects));}catch{} },[referenceProjects]);
 
   const [similarityMatches, setSimilarityMatches] = useState(null); // null | [{ref,score}]
+  const [confirmedMatches, setConfirmedMatches] = useState(null);
   const [pendingAutoCalc, setPendingAutoCalc] = useState(false);
+  const [appliedMarkup, setAppliedMarkup] = useState(null); // null | {factor, avgMargin, upliftPct, refNames}
 
   useEffect(() => {
     if (project.deadline) {
@@ -2143,7 +2164,7 @@ function App() {
   },[]);
   const updateQuote = useCallback((f,v)=>setQuote(p=>({...p,[f]:v})),[]);
 
-  const runAutoCalc = useCallback(()=>{
+  const runAutoCalc = useCallback((matchesForMarkup = null)=>{
     const start = project.startDate || ganttStart;
     const stdKey = project.videoType === "3D 애니메이션" ? "animation" : "cinematic";
     const activeStds = allStandards[stdKey] || allStandards.cinematic;
@@ -2154,12 +2175,27 @@ function App() {
     const newEnd  = (project.deadline && project.deadline > lastEnd) ? project.deadline : addDays(lastEnd, 7);
     setGanttEnd(newEnd);
     setGanttStart(start);
+
+    const markup = matchesForMarkup ? calcMarkupFactor(matchesForMarkup) : { factor: 1.0, avgMargin: null, upliftPct: 0 };
+    if (markup.upliftPct > 0) {
+      setAppliedMarkup({
+        ...markup,
+        refNames: matchesForMarkup.filter(m=>Number(m.ref.totalAmount)>0&&Number(m.ref.actualCost)>0).map(m=>m.ref.name),
+      });
+    } else {
+      setAppliedMarkup(null);
+    }
+
     setQuote(q=>({...q, items: syncQuoteFromSchedule(phases, q.items).map(item=>{
       const roleId = item.roleId;
       const phaseId = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===roleId)?.[0];
       const hcMap = {modeling:"model",texture_shading:"lookDev",rigging:"rigging",animation_main:"anim",lighting_render:"lr",fx:"fx",simulation:"sim",composition:"comp",unreal:"unreal",motion_graphic:"mg"};
       const hc = hcMap[phaseId];
-      return hc && headcounts[hc] ? {...item, headcount: headcounts[hc]} : item;
+      const withHc = hc && headcounts[hc] ? {...item, headcount: headcounts[hc]} : item;
+      if (markup.factor > 1.0 && !getRole(withHc.roleId)?.isContingency) {
+        return {...withHc, rate: Math.round(withHc.rate * markup.factor / 1000) * 1000};
+      }
+      return withHc;
     })}));
   },[project, allStandards, ganttStart, internalStaff]);
 
@@ -2181,9 +2217,11 @@ function App() {
   useEffect(()=>{
     if (pendingAutoCalc) {
       setPendingAutoCalc(false);
-      runAutoCalc();
+      const m = confirmedMatches;
+      setConfirmedMatches(null);
+      runAutoCalc(m);
     }
-  },[pendingAutoCalc, runAutoCalc]);
+  },[pendingAutoCalc, runAutoCalc, confirmedMatches]);
 
   const saveProject = () => {
     const entry = {id:Date.now(),project,schedule,quote,savedAt:new Date().toLocaleString("ko-KR")};
@@ -2196,7 +2234,7 @@ function App() {
   };
   const newProject = () => {
     if (window.confirm("새 프로젝트를 시작하면 현재 내용이 초기화됩니다.")) {
-      setProject(DEFAULT_PROJECT); setSchedule(DEFAULT_SCHEDULE); setQuote(DEFAULT_QUOTE); setActiveTab("info");
+      setProject(DEFAULT_PROJECT); setSchedule(DEFAULT_SCHEDULE); setQuote(DEFAULT_QUOTE); setActiveTab("info"); setAppliedMarkup(null);
     }
   };
 
@@ -2277,6 +2315,24 @@ function App() {
           ))}
         </div>
 
+        {/* 단가 상향 조정 배너 */}
+        {appliedMarkup && (
+          <div style={{marginBottom:16,padding:"12px 16px",borderRadius:10,background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.35)",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:13,color:"#D97706",marginBottom:3}}>
+                ⚠️ 리스크 반영 — 단가 {appliedMarkup.upliftPct}% 상향 조정됨
+              </div>
+              <div style={{fontSize:12,color:"#6B7280"}}>
+                유사 레퍼런스
+                {appliedMarkup.refNames.length > 0 && <> (<strong>{appliedMarkup.refNames.join(", ")}</strong>)</>}의
+                평균 이익률이 <strong style={{color: appliedMarkup.avgMargin < 0 ? "#EF4444" : "#F59E0B"}}>{appliedMarkup.avgMargin}%</strong>로
+                목표(25%)보다 낮아 견적 단가를 자동으로 상향했습니다. 견적 탭에서 수동 조정 가능합니다.
+              </div>
+            </div>
+            <button onClick={()=>setAppliedMarkup(null)} style={{background:"none",border:"none",color:"#9CA3AF",cursor:"pointer",fontSize:18,lineHeight:1,flexShrink:0}}>×</button>
+          </div>
+        )}
+
         {/* 탭 콘텐츠 */}
         {activeTab==="info"      && <ProjectInfoTab project={project} onChange={updateProject} />}
         {activeTab==="schedule"  && <ScheduleTab schedule={schedule} onChange={updateSchedule} project={project} standards={allStandards[project.videoType==="3D 애니메이션"?"animation":"cinematic"]} projectStart={project.startDate} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} onAutoCalc={handleAutoCalc} />}
@@ -2290,7 +2346,7 @@ function App() {
         {similarityMatches && (
           <SimilarityModal
             matches={similarityMatches}
-            onProceed={()=>{ setSimilarityMatches(null); setPendingAutoCalc(true); }}
+            onProceed={()=>{ setConfirmedMatches(similarityMatches); setSimilarityMatches(null); setPendingAutoCalc(true); }}
             onCancel={()=>{ setSimilarityMatches(null); setPendingAutoCalc(false); }}
           />
         )}
