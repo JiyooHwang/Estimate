@@ -1769,7 +1769,7 @@ function calcSimilarity(ref, cur) {
 }
 
 /* ── 레퍼런스 탭 ──────────────────────────────────────────────────────── */
-const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",notes:""};
+const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",videoUrl:"",notes:""};
 
 function ReferenceTab({refs, onChange}) {
   const [editing, setEditing] = React.useState(null); // null | ref object
@@ -1852,6 +1852,10 @@ function ReferenceTab({refs, onChange}) {
               </select>
             </label>
             <label style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:4}}>
+              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>영상 링크 (YouTube, Vimeo 등)</span>
+              <input type="url" value={editing.videoUrl||""} onChange={e=>setEditing(v=>({...v,videoUrl:e.target.value}))} placeholder="https://..." style={inp} />
+            </label>
+            <label style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:4}}>
               <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>메모 / 특이사항</span>
               <textarea value={editing.notes||""} onChange={e=>setEditing(v=>({...v,notes:e.target.value}))} rows={2} style={{...inp,resize:"vertical"}} />
             </label>
@@ -1886,7 +1890,14 @@ function ReferenceTab({refs, onChange}) {
                     )}
                     {r.resolution && <span>🖥 {r.resolution.includes("3840")?"4K":"FHD"}</span>}
                   </div>
-                  {r.notes && <div style={{marginTop:6,fontSize:12,color:"#9CA3AF",fontStyle:"italic"}}>{r.notes}</div>}
+                  {r.videoUrl && (
+                    <div style={{marginTop:6}}>
+                      <a href={r.videoUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:"#3B82C4",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>
+                        🎬 영상 보기
+                      </a>
+                    </div>
+                  )}
+                  {r.notes && <div style={{marginTop:4,fontSize:12,color:"#9CA3AF",fontStyle:"italic"}}>{r.notes}</div>}
                 </div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8,flexShrink:0}}>
                   {r.totalAmount ? (
@@ -1941,7 +1952,12 @@ function SimilarityModal({matches, onProceed, onCancel}) {
                       {assets > 0 && <span>👤 에셋 {assets}종</span>}
                       {ref.fps && <span>🎬 {ref.fps}fps</span>}
                     </div>
-                    {ref.notes && <div style={{marginTop:6,fontSize:11,color:"#9CA3AF",fontStyle:"italic"}}>{ref.notes}</div>}
+                    {ref.videoUrl && (
+                      <div style={{marginTop:6}}>
+                        <a href={ref.videoUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:"#3B82C4",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>🎬 영상 보기</a>
+                      </div>
+                    )}
+                    {ref.notes && <div style={{marginTop:4,fontSize:11,color:"#9CA3AF",fontStyle:"italic"}}>{ref.notes}</div>}
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
                     {ref.totalAmount
