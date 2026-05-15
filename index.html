@@ -1769,11 +1769,35 @@ function calcSimilarity(ref, cur) {
 }
 
 /* ── 레퍼런스 탭 ──────────────────────────────────────────────────────── */
-const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",productionDays:"",clientDifficulty:"보통",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",videoUrl:"",notes:""};
+const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",productionDays:"",clientDifficulty:"보통",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",actualCost:"",videoUrl:"",notes:""};
 
 function ReferenceTab({refs, onChange}) {
   const [editing, setEditing] = React.useState(null); // null | ref object
   const [search, setSearch] = React.useState("");
+  const fileRef = React.useRef(null);
+
+  const exportJSON = () => {
+    const blob = new Blob([JSON.stringify(refs, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "locus_references.json"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importJSON = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data)) { alert("올바른 형식이 아닙니다."); return; }
+        if (window.confirm(`${data.length}개의 레퍼런스를 불러옵니다. 기존 데이터를 덮어쓸까요?`)) onChange(data);
+      } catch { alert("파일을 읽는 중 오류가 발생했습니다."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
 
   const save = () => {
     if (!editing.name) { alert("프로젝트명을 입력하세요."); return; }
@@ -1802,7 +1826,12 @@ function ReferenceTab({refs, onChange}) {
           <h2 style={{margin:0,fontSize:16,fontWeight:800,color:"#1A1A2E"}}>📚 레퍼런스 프로젝트</h2>
           <p style={{margin:"4px 0 0",fontSize:12,color:"#6B7280"}}>과거 완료 프로젝트를 등록해두면 견적 산출 전 유사 프로젝트를 자동으로 비교합니다.</p>
         </div>
-        <button onClick={()=>setEditing({...BLANK_REF})} style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>+ 레퍼런스 등록</button>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <input type="file" accept=".json" ref={fileRef} onChange={importJSON} style={{display:"none"}} />
+          <button onClick={()=>fileRef.current.click()} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",fontSize:13,cursor:"pointer",fontWeight:600}}>📥 가져오기</button>
+          <button onClick={exportJSON} disabled={refs.length===0} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,opacity:refs.length===0?0.4:1}}>📤 내보내기</button>
+          <button onClick={()=>setEditing({...BLANK_REF})} style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>+ 레퍼런스 등록</button>
+        </div>
       </div>
 
       {/* 검색 */}
@@ -1820,7 +1849,7 @@ function ReferenceTab({refs, onChange}) {
               ["영상 길이 (초)","duration","number"],["제작 기간 (일)","productionDays","number"],
               ["캐릭터 수 (합계)","charCount","number"],
               ["프랍 수 (합계)","propCount","number"],["배경 수 (합계)","bgCount","number"],
-              ["최종 견적액 (원)","totalAmount","number"],
+              ["최종 견적액 (원)","totalAmount","number"],["실 제작 비용 (원)","actualCost","number"],
             ].map(([label,field,type])=>(
               <label key={field} style={{display:"flex",flexDirection:"column",gap:4}}>
                 <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>{label}</span>
@@ -1867,7 +1896,19 @@ function ReferenceTab({refs, onChange}) {
               <textarea value={editing.notes||""} onChange={e=>setEditing(v=>({...v,notes:e.target.value}))} rows={2} style={{...inp,resize:"vertical"}} />
             </label>
           </div>
-          <div style={{display:"flex",gap:8,marginTop:16}}>
+          {(editing.totalAmount && editing.actualCost) && (() => {
+            const profit = Number(editing.totalAmount) - Number(editing.actualCost);
+            const margin = Math.round((profit / Number(editing.totalAmount)) * 100);
+            return (
+              <div style={{marginTop:12,padding:"10px 14px",borderRadius:8,background: profit>=0?"rgba(52,211,153,0.1)":"rgba(239,68,68,0.08)",border:`1px solid ${profit>=0?"rgba(52,211,153,0.3)":"rgba(239,68,68,0.25)"}`,display:"flex",gap:20,flexWrap:"wrap"}}>
+                <span style={{fontSize:12,color:"#6B7280"}}>영업이익</span>
+                <span style={{fontWeight:800,fontSize:14,color: profit>=0?"#059669":"#EF4444"}}>₩{formatNum(Math.abs(profit))}{profit<0?" (적자)":""}</span>
+                <span style={{fontSize:12,color:"#6B7280"}}>이익률</span>
+                <span style={{fontWeight:700,fontSize:13,color: margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444"}}>{margin}%</span>
+              </div>
+            );
+          })()}
+          <div style={{display:"flex",gap:8,marginTop:12}}>
             <button onClick={save} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,cursor:"pointer"}}>저장</button>
             <button onClick={()=>setEditing(null)} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",cursor:"pointer",fontSize:13}}>취소</button>
           </div>
@@ -1913,12 +1954,20 @@ function ReferenceTab({refs, onChange}) {
                   {r.notes && <div style={{marginTop:4,fontSize:12,color:"#9CA3AF",fontStyle:"italic"}}>{r.notes}</div>}
                 </div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8,flexShrink:0}}>
-                  {r.totalAmount ? (
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:11,color:"#6B7280"}}>최종 견적</div>
-                      <div style={{fontWeight:800,fontSize:15,color:"#C8102E"}}>₩{formatNum(Number(r.totalAmount))}</div>
-                    </div>
-                  ) : <span style={{fontSize:12,color:"#9CA3AF"}}>견적액 미입력</span>}
+                  {r.totalAmount ? (() => {
+                    const profit = r.actualCost ? Number(r.totalAmount) - Number(r.actualCost) : null;
+                    const margin = profit !== null ? Math.round((profit / Number(r.totalAmount)) * 100) : null;
+                    return (
+                      <div style={{textAlign:"right",display:"flex",flexDirection:"column",gap:3}}>
+                        <div><div style={{fontSize:10,color:"#6B7280"}}>최종 견적</div><div style={{fontWeight:800,fontSize:14,color:"#C8102E"}}>₩{formatNum(Number(r.totalAmount))}</div></div>
+                        {r.actualCost && <div><div style={{fontSize:10,color:"#6B7280"}}>실 제작 비용</div><div style={{fontWeight:700,fontSize:13,color:"#374151"}}>₩{formatNum(Number(r.actualCost))}</div></div>}
+                        {profit !== null && <div style={{padding:"3px 8px",borderRadius:6,background:profit>=0?"rgba(52,211,153,0.12)":"rgba(239,68,68,0.08)"}}>
+                          <span style={{fontSize:11,fontWeight:800,color:profit>=0?"#059669":"#EF4444"}}>영업이익 {profit>=0?"+":"-"}₩{formatNum(Math.abs(profit))}</span>
+                          <span style={{fontSize:10,color:margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444",marginLeft:5}}>{margin}%</span>
+                        </div>}
+                      </div>
+                    );
+                  })() : <span style={{fontSize:12,color:"#9CA3AF"}}>견적액 미입력</span>}
                   <div style={{display:"flex",gap:6}}>
                     <button onClick={()=>setEditing({...r})} style={{padding:"5px 10px",borderRadius:7,border:"1px solid #D1D5DB",background:"#fff",fontSize:12,cursor:"pointer"}}>✏️ 수정</button>
                     <button onClick={()=>del(r.id)} style={{padding:"5px 10px",borderRadius:7,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.05)",color:"#EF4444",fontSize:12,cursor:"pointer"}}>🗑</button>
@@ -1978,10 +2027,20 @@ function SimilarityModal({matches, onProceed, onCancel}) {
                     )}
                     {ref.notes && <div style={{marginTop:4,fontSize:11,color:"#9CA3AF",fontStyle:"italic"}}>{ref.notes}</div>}
                   </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    {ref.totalAmount
-                      ? <div><div style={{fontSize:11,color:"#6B7280"}}>최종 견적액</div><div style={{fontWeight:900,fontSize:17,color:"#C8102E"}}>₩{formatNum(Number(ref.totalAmount))}</div></div>
-                      : <span style={{fontSize:12,color:"#9CA3AF"}}>견적액 미입력</span>}
+                  <div style={{textAlign:"right",flexShrink:0,display:"flex",flexDirection:"column",gap:4}}>
+                    {ref.totalAmount ? (() => {
+                      const profit = ref.actualCost ? Number(ref.totalAmount) - Number(ref.actualCost) : null;
+                      const margin = profit !== null ? Math.round((profit / Number(ref.totalAmount)) * 100) : null;
+                      return (<>
+                        <div><div style={{fontSize:10,color:"#6B7280"}}>최종 견적액</div><div style={{fontWeight:900,fontSize:16,color:"#C8102E"}}>₩{formatNum(Number(ref.totalAmount))}</div></div>
+                        {ref.actualCost && <div><div style={{fontSize:10,color:"#6B7280"}}>실 제작 비용</div><div style={{fontWeight:700,fontSize:13,color:"#374151"}}>₩{formatNum(Number(ref.actualCost))}</div></div>}
+                        {profit !== null && <div style={{padding:"3px 8px",borderRadius:6,background:profit>=0?"rgba(52,211,153,0.12)":"rgba(239,68,68,0.08)"}}>
+                          <div style={{fontSize:10,color:"#6B7280"}}>영업이익</div>
+                          <span style={{fontSize:12,fontWeight:800,color:profit>=0?"#059669":"#EF4444"}}>{profit>=0?"+":"-"}₩{formatNum(Math.abs(profit))}</span>
+                          <span style={{fontSize:11,color:margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444",marginLeft:4}}>{margin}%</span>
+                        </div>}
+                      </>);
+                    })() : <span style={{fontSize:12,color:"#9CA3AF"}}>견적액 미입력</span>}
                   </div>
                 </div>
                 <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
