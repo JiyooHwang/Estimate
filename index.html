@@ -1751,12 +1751,231 @@ function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
   return {phases, headcounts};
 }
 
+/* ── 레퍼런스 유사도 계산 ──────────────────────────────────────────────── */
+function calcSimilarity(ref, cur) {
+  let score = 0;
+  if (ref.videoType && cur.videoType && ref.videoType === cur.videoType) score += 30;
+  if (ref.qualityGrade && cur.qualityGrade && ref.qualityGrade === cur.qualityGrade) score += 15;
+  const rDur = Number(ref.duration)||0, cDur = Number(cur.duration)||0;
+  if (rDur > 0 && cDur > 0) score += Math.round((Math.min(rDur,cDur)/Math.max(rDur,cDur))*25);
+  const rA = (Number(ref.charCount)||0)+(Number(ref.propCount)||0)+(Number(ref.bgCount)||0);
+  const cA = (Number(cur.charS)||0)+(Number(cur.charA)||0)+(Number(cur.charB)||0)
+           + (Number(cur.propS)||0)+(Number(cur.propA)||0)+(Number(cur.propB)||0)
+           + (Number(cur.bgS) ||0)+(Number(cur.bgA) ||0)+(Number(cur.bgB) ||0);
+  if (rA > 0 && cA > 0) score += Math.round((Math.min(rA,cA)/Math.max(rA,cA))*20);
+  if (Number(ref.fps)===Number(cur.fps)) score += 5;
+  if (ref.resolution && cur.resolution && ref.resolution===cur.resolution) score += 5;
+  return score;
+}
+
+/* ── 레퍼런스 탭 ──────────────────────────────────────────────────────── */
+const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",notes:""};
+
+function ReferenceTab({refs, onChange}) {
+  const [editing, setEditing] = React.useState(null); // null | ref object
+  const [search, setSearch] = React.useState("");
+
+  const save = () => {
+    if (!editing.name) { alert("프로젝트명을 입력하세요."); return; }
+    if (editing.id) {
+      onChange(refs.map(r => r.id===editing.id ? editing : r));
+    } else {
+      onChange([{...editing, id:Date.now()}, ...refs]);
+    }
+    setEditing(null);
+  };
+
+  const del = id => {
+    if (window.confirm("이 레퍼런스를 삭제하시겠습니까?")) onChange(refs.filter(r=>r.id!==id));
+  };
+
+  const inp = {padding:"6px 10px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:13,background:"#fff",width:"100%",boxSizing:"border-box"};
+  const filteredRefs = refs.filter(r =>
+    !search || r.name.includes(search) || (r.client||"").includes(search) || (r.notes||"").includes(search)
+  );
+
+  return (
+    <div>
+      {/* 상단 컨트롤 */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,gap:12,flexWrap:"wrap"}}>
+        <div>
+          <h2 style={{margin:0,fontSize:16,fontWeight:800,color:"#1A1A2E"}}>📚 레퍼런스 프로젝트</h2>
+          <p style={{margin:"4px 0 0",fontSize:12,color:"#6B7280"}}>과거 완료 프로젝트를 등록해두면 견적 산출 전 유사 프로젝트를 자동으로 비교합니다.</p>
+        </div>
+        <button onClick={()=>setEditing({...BLANK_REF})} style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>+ 레퍼런스 등록</button>
+      </div>
+
+      {/* 검색 */}
+      {refs.length > 0 && (
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="프로젝트명 / 클라이언트 검색..." style={{...inp,marginBottom:14,maxWidth:320}} />
+      )}
+
+      {/* 등록 / 수정 폼 */}
+      {editing && (
+        <div style={{background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:12,padding:20,marginBottom:20}}>
+          <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>{editing.id?"레퍼런스 수정":"새 레퍼런스 등록"}</h3>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+            {[
+              ["프로젝트명 *","name","text"],["클라이언트","client","text"],["연도","year","number"],
+              ["영상 길이 (초)","duration","number"],["캐릭터 수 (합계)","charCount","number"],
+              ["프랍 수 (합계)","propCount","number"],["배경 수 (합계)","bgCount","number"],
+              ["최종 견적액 (원)","totalAmount","number"],
+            ].map(([label,field,type])=>(
+              <label key={field} style={{display:"flex",flexDirection:"column",gap:4}}>
+                <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>{label}</span>
+                <input type={type} value={editing[field]||""} onChange={e=>setEditing(v=>({...v,[field]:e.target.value}))} style={inp} />
+              </label>
+            ))}
+            <label style={{display:"flex",flexDirection:"column",gap:4}}>
+              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>영상 유형</span>
+              <select value={editing.videoType} onChange={e=>setEditing(v=>({...v,videoType:e.target.value}))} style={inp}>
+                <option value="">선택</option>
+                {VIDEO_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:4}}>
+              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>품질 등급</span>
+              <select value={editing.qualityGrade} onChange={e=>setEditing(v=>({...v,qualityGrade:e.target.value}))} style={inp}>
+                {["S","A","B"].map(g=><option key={g} value={g}>{g}</option>)}
+              </select>
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:4}}>
+              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>FPS</span>
+              <select value={editing.fps} onChange={e=>setEditing(v=>({...v,fps:e.target.value}))} style={inp}>
+                <option value="24">24 fps</option><option value="30">30 fps</option>
+              </select>
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:4}}>
+              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>해상도</span>
+              <select value={editing.resolution} onChange={e=>setEditing(v=>({...v,resolution:e.target.value}))} style={inp}>
+                <option value="1920x1080">FHD 1920×1080</option><option value="3840x2160">4K 3840×2160</option>
+              </select>
+            </label>
+            <label style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:4}}>
+              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>메모 / 특이사항</span>
+              <textarea value={editing.notes||""} onChange={e=>setEditing(v=>({...v,notes:e.target.value}))} rows={2} style={{...inp,resize:"vertical"}} />
+            </label>
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:16}}>
+            <button onClick={save} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,cursor:"pointer"}}>저장</button>
+            <button onClick={()=>setEditing(null)} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",cursor:"pointer",fontSize:13}}>취소</button>
+          </div>
+        </div>
+      )}
+
+      {/* 목록 */}
+      {filteredRefs.length===0
+        ? <div style={{textAlign:"center",padding:"40px 0",color:"#9CA3AF",fontSize:13}}>
+            {refs.length===0 ? "등록된 레퍼런스가 없습니다. [+ 레퍼런스 등록] 버튼으로 추가하세요." : "검색 결과가 없습니다."}
+          </div>
+        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {filteredRefs.map(r=>(
+              <div key={r.id} style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:12,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                    <span style={{fontWeight:800,fontSize:14}}>{r.name}</span>
+                    {r.year && <span style={{fontSize:11,color:"#6B7280",background:"#F3F4F6",padding:"1px 7px",borderRadius:20}}>{r.year}</span>}
+                    {r.client && <span style={{fontSize:11,color:"#6B7280"}}>{r.client}</span>}
+                    {r.videoType && <span style={{fontSize:11,color:"#6B9ECC",background:"rgba(107,158,204,0.1)",padding:"1px 7px",borderRadius:20}}>{r.videoType}</span>}
+                    {r.qualityGrade && <span style={{fontSize:11,color:"#34D399",background:"rgba(52,211,153,0.1)",padding:"1px 7px",borderRadius:20}}>{r.qualityGrade}등급</span>}
+                  </div>
+                  <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:12,color:"#6B7280"}}>
+                    {r.duration && <span>⏱ {r.duration}초 ({r.fps||24}fps)</span>}
+                    {(Number(r.charCount)||0)+(Number(r.propCount)||0)+(Number(r.bgCount)||0) > 0 && (
+                      <span>👤 캐릭터 {r.charCount||0} · 프랍 {r.propCount||0} · 배경 {r.bgCount||0}</span>
+                    )}
+                    {r.resolution && <span>🖥 {r.resolution.includes("3840")?"4K":"FHD"}</span>}
+                  </div>
+                  {r.notes && <div style={{marginTop:6,fontSize:12,color:"#9CA3AF",fontStyle:"italic"}}>{r.notes}</div>}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8,flexShrink:0}}>
+                  {r.totalAmount ? (
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:11,color:"#6B7280"}}>최종 견적</div>
+                      <div style={{fontWeight:800,fontSize:15,color:"#C8102E"}}>₩{formatNum(Number(r.totalAmount))}</div>
+                    </div>
+                  ) : <span style={{fontSize:12,color:"#9CA3AF"}}>견적액 미입력</span>}
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>setEditing({...r})} style={{padding:"5px 10px",borderRadius:7,border:"1px solid #D1D5DB",background:"#fff",fontSize:12,cursor:"pointer"}}>✏️ 수정</button>
+                    <button onClick={()=>del(r.id)} style={{padding:"5px 10px",borderRadius:7,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.05)",color:"#EF4444",fontSize:12,cursor:"pointer"}}>🗑</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>}
+    </div>
+  );
+}
+
+/* ── 유사 프로젝트 모달 ────────────────────────────────────────────────── */
+function SimilarityModal({matches, onProceed, onCancel}) {
+  const ovl = {position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",padding:20};
+  const box = {background:"#fff",borderRadius:16,maxWidth:680,width:"100%",maxHeight:"80vh",overflowY:"auto",padding:28,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"};
+  return (
+    <div style={ovl}>
+      <div style={box}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
+          <div>
+            <h2 style={{margin:0,fontSize:18,fontWeight:900,color:"#1A1A2E"}}>📚 유사한 과거 프로젝트 발견</h2>
+            <p style={{margin:"6px 0 0",fontSize:13,color:"#6B7280"}}>아래 레퍼런스를 참고하여 현재 견적이 적절한지 확인하세요.</p>
+          </div>
+          <button onClick={onCancel} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9CA3AF",lineHeight:1}}>×</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:22}}>
+          {matches.map(({ref, score})=>{
+            const assets = (Number(ref.charCount)||0)+(Number(ref.propCount)||0)+(Number(ref.bgCount)||0);
+            const barColor = score>=70?"#34D399":score>=50?"#F59E0B":"#9CA3AF";
+            return (
+              <div key={ref.id} style={{border:"1px solid #E5E7EB",borderRadius:12,padding:"14px 16px",background:"#F8F9FA"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                      <span style={{fontWeight:800,fontSize:14}}>{ref.name}</span>
+                      {ref.year && <span style={{fontSize:11,color:"#6B7280",background:"#E5E7EB",padding:"1px 7px",borderRadius:20}}>{ref.year}</span>}
+                      {ref.client && <span style={{fontSize:12,color:"#6B7280"}}>{ref.client}</span>}
+                    </div>
+                    <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:"#6B7280"}}>
+                      {ref.videoType && <span>📹 {ref.videoType}</span>}
+                      {ref.duration && <span>⏱ {ref.duration}초</span>}
+                      {ref.qualityGrade && <span>⭐ {ref.qualityGrade}등급</span>}
+                      {assets > 0 && <span>👤 에셋 {assets}종</span>}
+                      {ref.fps && <span>🎬 {ref.fps}fps</span>}
+                    </div>
+                    {ref.notes && <div style={{marginTop:6,fontSize:11,color:"#9CA3AF",fontStyle:"italic"}}>{ref.notes}</div>}
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    {ref.totalAmount
+                      ? <div><div style={{fontSize:11,color:"#6B7280"}}>최종 견적액</div><div style={{fontWeight:900,fontSize:17,color:"#C8102E"}}>₩{formatNum(Number(ref.totalAmount))}</div></div>
+                      : <span style={{fontSize:12,color:"#9CA3AF"}}>견적액 미입력</span>}
+                  </div>
+                </div>
+                <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:11,color:"#6B7280",whiteSpace:"nowrap"}}>유사도</span>
+                  <div style={{flex:1,height:6,background:"#E5E7EB",borderRadius:3,overflow:"hidden"}}>
+                    <div style={{width:`${score}%`,height:"100%",background:barColor,borderRadius:3,transition:"width 0.4s"}} />
+                  </div>
+                  <span style={{fontSize:12,fontWeight:700,color:barColor,minWidth:36,textAlign:"right"}}>{score}%</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onCancel} style={{padding:"10px 20px",borderRadius:9,border:"1px solid #D1D5DB",background:"#fff",fontSize:13,cursor:"pointer"}}>취소</button>
+          <button onClick={onProceed} style={{padding:"10px 22px",borderRadius:9,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>참고 완료 — 자동계산 진행</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   {id:"info",      label:"프로젝트 정보", icon:"📁"},
   {id:"schedule",  label:"스케줄",        icon:"📅"},
   {id:"quote",     label:"견적",          icon:"💰"},
   {id:"standards", label:"기준표",        icon:"📋"},
   {id:"staff",     label:"내부인원",      icon:"👥"},
+  {id:"reference", label:"레퍼런스",      icon:"📚"},
   {id:"summary",   label:"요약",          icon:"📊"}
 ];
 
@@ -1804,6 +2023,15 @@ function App() {
   });
   useEffect(()=>{ try{localStorage.setItem("locus_internal_staff",JSON.stringify(internalStaff));}catch{} },[internalStaff]);
 
+  const [referenceProjects, setReferenceProjects] = useState(() => {
+    try { const s=localStorage.getItem("locus_references"); if(s) return JSON.parse(s); } catch{}
+    return [];
+  });
+  useEffect(()=>{ try{localStorage.setItem("locus_references",JSON.stringify(referenceProjects));}catch{} },[referenceProjects]);
+
+  const [similarityMatches, setSimilarityMatches] = useState(null); // null | [{ref,score}]
+  const [pendingAutoCalc, setPendingAutoCalc] = useState(false);
+
   useEffect(() => {
     if (project.deadline) {
       const st = project.startDate || new Date().toISOString().slice(0,10);
@@ -1821,7 +2049,7 @@ function App() {
   },[]);
   const updateQuote = useCallback((f,v)=>setQuote(p=>({...p,[f]:v})),[]);
 
-  const handleAutoCalc = useCallback(()=>{
+  const runAutoCalc = useCallback(()=>{
     const start = project.startDate || ganttStart;
     const stdKey = project.videoType === "3D 애니메이션" ? "animation" : "cinematic";
     const activeStds = allStandards[stdKey] || allStandards.cinematic;
@@ -1840,6 +2068,28 @@ function App() {
       return hc && headcounts[hc] ? {...item, headcount: headcounts[hc]} : item;
     })}));
   },[project, allStandards, ganttStart, internalStaff]);
+
+  const handleAutoCalc = useCallback(()=>{
+    if (referenceProjects.length > 0) {
+      const matches = referenceProjects
+        .map(ref => ({ref, score: calcSimilarity(ref, project)}))
+        .filter(m => m.score >= 40)
+        .sort((a,b) => b.score - a.score)
+        .slice(0, 3);
+      if (matches.length > 0) {
+        setSimilarityMatches(matches);
+        return;
+      }
+    }
+    runAutoCalc();
+  },[project, referenceProjects, runAutoCalc]);
+
+  useEffect(()=>{
+    if (pendingAutoCalc) {
+      setPendingAutoCalc(false);
+      runAutoCalc();
+    }
+  },[pendingAutoCalc, runAutoCalc]);
 
   const saveProject = () => {
     const entry = {id:Date.now(),project,schedule,quote,savedAt:new Date().toLocaleString("ko-KR")};
@@ -1939,7 +2189,17 @@ function App() {
         {activeTab==="quote"     && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={true} />}
         {activeTab==="standards" && <StandardsTab allStandards={allStandards} onChange={setAllStandards} />}
         {activeTab==="staff"     && <InternalStaffTab internalStaff={internalStaff} onChange={setInternalStaff} />}
+        {activeTab==="reference" && <ReferenceTab refs={referenceProjects} onChange={setReferenceProjects} />}
         {activeTab==="summary"   && <SummaryTab project={project} schedule={schedule} quote={quote} />}
+
+        {/* 유사 레퍼런스 모달 */}
+        {similarityMatches && (
+          <SimilarityModal
+            matches={similarityMatches}
+            onProceed={()=>{ setSimilarityMatches(null); setPendingAutoCalc(true); }}
+            onCancel={()=>{ setSimilarityMatches(null); setPendingAutoCalc(false); }}
+          />
+        )}
 
         {/* 하단 네비게이션 */}
         <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>
