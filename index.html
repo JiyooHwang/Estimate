@@ -1859,78 +1859,85 @@ function ReferenceTab({refs, onChange}) {
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="프로젝트명 / 클라이언트 검색..." style={{...inp,marginBottom:14,maxWidth:320}} />
       )}
 
-      {/* 등록 / 수정 폼 */}
+      {/* 등록 / 수정 모달 */}
       {editing && (
-        <div style={{background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:12,padding:20,marginBottom:20}}>
-          <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>{editing.id?"레퍼런스 수정":"새 레퍼런스 등록"}</h3>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
-            {[
-              ["프로젝트명 *","name","text"],["클라이언트","client","text"],["연도","year","number"],
-              ["영상 길이 (초)","duration","number"],["제작 기간 (일)","productionDays","number"],
-              ["캐릭터 수 (합계)","charCount","number"],
-              ["프랍 수 (합계)","propCount","number"],["배경 수 (합계)","bgCount","number"],
-              ["최종 견적액 (원)","totalAmount","number"],["실 제작 비용 (원)","actualCost","number"],
-            ].map(([label,field,type])=>(
-              <label key={field} style={{display:"flex",flexDirection:"column",gap:4}}>
-                <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>{label}</span>
-                <input type={type} value={editing[field]||""} onChange={e=>setEditing(v=>({...v,[field]:e.target.value}))} style={inp} />
-              </label>
-            ))}
-            <label style={{display:"flex",flexDirection:"column",gap:4}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>영상 유형</span>
-              <select value={editing.videoType} onChange={e=>setEditing(v=>({...v,videoType:e.target.value}))} style={inp}>
-                <option value="">선택</option>
-                {VIDEO_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
-            <label style={{display:"flex",flexDirection:"column",gap:4}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>클라이언트 난이도</span>
-              <select value={editing.clientDifficulty||"보통"} onChange={e=>setEditing(v=>({...v,clientDifficulty:e.target.value}))} style={inp}>
-                {["쉬움","보통","어려움","매우 어려움"].map(d=><option key={d} value={d}>{d}</option>)}
-              </select>
-            </label>
-            <label style={{display:"flex",flexDirection:"column",gap:4}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>품질 등급</span>
-              <select value={editing.qualityGrade} onChange={e=>setEditing(v=>({...v,qualityGrade:e.target.value}))} style={inp}>
-                {["S","A","B"].map(g=><option key={g} value={g}>{g}</option>)}
-              </select>
-            </label>
-            <label style={{display:"flex",flexDirection:"column",gap:4}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>FPS</span>
-              <select value={editing.fps} onChange={e=>setEditing(v=>({...v,fps:e.target.value}))} style={inp}>
-                <option value="24">24 fps</option><option value="30">30 fps</option>
-              </select>
-            </label>
-            <label style={{display:"flex",flexDirection:"column",gap:4}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>해상도</span>
-              <select value={editing.resolution} onChange={e=>setEditing(v=>({...v,resolution:e.target.value}))} style={inp}>
-                <option value="1920x1080">FHD 1920×1080</option><option value="3840x2160">4K 3840×2160</option>
-              </select>
-            </label>
-            <label style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:4}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>영상 링크 (YouTube, Vimeo 등)</span>
-              <input type="url" value={editing.videoUrl||""} onChange={e=>setEditing(v=>({...v,videoUrl:e.target.value}))} placeholder="https://..." style={inp} />
-            </label>
-            <label style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:4}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>메모 / 특이사항</span>
-              <textarea value={editing.notes||""} onChange={e=>setEditing(v=>({...v,notes:e.target.value}))} rows={2} style={{...inp,resize:"vertical"}} />
-            </label>
-          </div>
-          {(editing.totalAmount && editing.actualCost) && (() => {
-            const profit = Number(editing.totalAmount) - Number(editing.actualCost);
-            const margin = Math.round((profit / Number(editing.totalAmount)) * 100);
-            return (
-              <div style={{marginTop:12,padding:"10px 14px",borderRadius:8,background: profit>=0?"rgba(52,211,153,0.1)":"rgba(239,68,68,0.08)",border:`1px solid ${profit>=0?"rgba(52,211,153,0.3)":"rgba(239,68,68,0.25)"}`,display:"flex",gap:20,flexWrap:"wrap"}}>
-                <span style={{fontSize:12,color:"#6B7280"}}>영업이익</span>
-                <span style={{fontWeight:800,fontSize:14,color: profit>=0?"#059669":"#EF4444"}}>₩{formatNum(Math.abs(profit))}{profit<0?" (적자)":""}</span>
-                <span style={{fontSize:12,color:"#6B7280"}}>이익률</span>
-                <span style={{fontWeight:700,fontSize:13,color: margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444"}}>{margin}%</span>
+        <div onClick={()=>setEditing(null)} style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,maxWidth:680,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #F3F4F6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <h3 style={{margin:0,fontSize:16,fontWeight:800,color:"#1A1A2E"}}>{editing.id?"✏️ 레퍼런스 수정":"📝 새 레퍼런스 등록"}</h3>
+              <button onClick={()=>setEditing(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9CA3AF",lineHeight:1}}>×</button>
+            </div>
+            <div style={{padding:"20px 24px"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+                {[
+                  ["프로젝트명 *","name","text"],["클라이언트","client","text"],["연도","year","number"],
+                  ["영상 길이 (초)","duration","number"],["제작 기간 (일)","productionDays","number"],
+                  ["캐릭터 수 (합계)","charCount","number"],
+                  ["프랍 수 (합계)","propCount","number"],["배경 수 (합계)","bgCount","number"],
+                  ["최종 견적액 (원)","totalAmount","number"],["실 제작 비용 (원)","actualCost","number"],
+                ].map(([label,field,type])=>(
+                  <label key={field} style={{display:"flex",flexDirection:"column",gap:4}}>
+                    <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>{label}</span>
+                    <input type={type} value={editing[field]||""} onChange={e=>setEditing(v=>({...v,[field]:e.target.value}))} style={inp} />
+                  </label>
+                ))}
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>영상 유형</span>
+                  <select value={editing.videoType} onChange={e=>setEditing(v=>({...v,videoType:e.target.value}))} style={inp}>
+                    <option value="">선택</option>
+                    {VIDEO_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>클라이언트 난이도</span>
+                  <select value={editing.clientDifficulty||"보통"} onChange={e=>setEditing(v=>({...v,clientDifficulty:e.target.value}))} style={inp}>
+                    {["쉬움","보통","어려움","매우 어려움"].map(d=><option key={d} value={d}>{d}</option>)}
+                  </select>
+                </label>
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>품질 등급</span>
+                  <select value={editing.qualityGrade} onChange={e=>setEditing(v=>({...v,qualityGrade:e.target.value}))} style={inp}>
+                    {["S","A","B"].map(g=><option key={g} value={g}>{g}</option>)}
+                  </select>
+                </label>
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>FPS</span>
+                  <select value={editing.fps} onChange={e=>setEditing(v=>({...v,fps:e.target.value}))} style={inp}>
+                    <option value="24">24 fps</option><option value="30">30 fps</option>
+                  </select>
+                </label>
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>해상도</span>
+                  <select value={editing.resolution} onChange={e=>setEditing(v=>({...v,resolution:e.target.value}))} style={inp}>
+                    <option value="1920x1080">FHD 1920×1080</option><option value="3840x2160">4K 3840×2160</option>
+                  </select>
+                </label>
+                <label style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>영상 링크 (YouTube, Vimeo 등)</span>
+                  <input type="url" value={editing.videoUrl||""} onChange={e=>setEditing(v=>({...v,videoUrl:e.target.value}))} placeholder="https://..." style={inp} />
+                </label>
+                <label style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>메모 / 특이사항</span>
+                  <textarea value={editing.notes||""} onChange={e=>setEditing(v=>({...v,notes:e.target.value}))} rows={2} style={{...inp,resize:"vertical"}} />
+                </label>
               </div>
-            );
-          })()}
-          <div style={{display:"flex",gap:8,marginTop:12}}>
-            <button onClick={save} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,cursor:"pointer"}}>저장</button>
-            <button onClick={()=>setEditing(null)} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",cursor:"pointer",fontSize:13}}>취소</button>
+              {(editing.totalAmount && editing.actualCost) && (() => {
+                const profit = Number(editing.totalAmount) - Number(editing.actualCost);
+                const margin = Math.round((profit / Number(editing.totalAmount)) * 100);
+                return (
+                  <div style={{marginTop:12,padding:"10px 14px",borderRadius:8,background:profit>=0?"rgba(52,211,153,0.1)":"rgba(239,68,68,0.08)",border:`1px solid ${profit>=0?"rgba(52,211,153,0.3)":"rgba(239,68,68,0.25)"}`,display:"flex",gap:20,flexWrap:"wrap"}}>
+                    <span style={{fontSize:12,color:"#6B7280"}}>영업이익</span>
+                    <span style={{fontWeight:800,fontSize:14,color:profit>=0?"#059669":"#EF4444"}}>₩{formatNum(Math.abs(profit))}{profit<0?" (적자)":""}</span>
+                    <span style={{fontSize:12,color:"#6B7280"}}>이익률</span>
+                    <span style={{fontWeight:700,fontSize:13,color:margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444"}}>{margin}%</span>
+                  </div>
+                );
+              })()}
+              <div style={{display:"flex",gap:8,marginTop:16,paddingTop:16,borderTop:"1px solid #F3F4F6"}}>
+                <button onClick={save} style={{padding:"9px 24px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>저장</button>
+                <button onClick={()=>setEditing(null)} style={{padding:"9px 16px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",cursor:"pointer",fontSize:13}}>취소</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
