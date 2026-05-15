@@ -1791,7 +1791,8 @@ function calcMarkupFactor(matches) {
 const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",productionDays:"",clientDifficulty:"보통",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",actualCost:"",videoUrl:"",notes:""};
 
 function ReferenceTab({refs, onChange}) {
-  const [editing, setEditing] = React.useState(null); // null | ref object
+  const [editing, setEditing] = React.useState(null);
+  const [viewing, setViewing] = React.useState(null); // null | ref object
   const [search, setSearch] = React.useState("");
   const fileRef = React.useRef(null);
 
@@ -1941,7 +1942,7 @@ function ReferenceTab({refs, onChange}) {
           </div>
         : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {filteredRefs.map(r=>(
-              <div key={r.id} style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:12,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+              <div key={r.id} onClick={()=>setViewing(r)} style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:12,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,cursor:"pointer",transition:"box-shadow 0.15s, border-color 0.15s"}} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.08)";e.currentTarget.style.borderColor="#C8102E33";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="#E5E7EB";}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
                     <span style={{fontWeight:800,fontSize:14}}>{r.name}</span>
@@ -1987,7 +1988,7 @@ function ReferenceTab({refs, onChange}) {
                       </div>
                     );
                   })() : <span style={{fontSize:12,color:"#9CA3AF"}}>견적액 미입력</span>}
-                  <div style={{display:"flex",gap:6}}>
+                  <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}>
                     <button onClick={()=>setEditing({...r})} style={{padding:"5px 10px",borderRadius:7,border:"1px solid #D1D5DB",background:"#fff",fontSize:12,cursor:"pointer"}}>✏️ 수정</button>
                     <button onClick={()=>del(r.id)} style={{padding:"5px 10px",borderRadius:7,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.05)",color:"#EF4444",fontSize:12,cursor:"pointer"}}>🗑</button>
                   </div>
@@ -1997,6 +1998,87 @@ function ReferenceTab({refs, onChange}) {
           </div>}
 
       {/* 자동 단가 조정 안내 */}
+      {/* 상세 보기 모달 */}
+      {viewing && (() => {
+        const r = viewing;
+        const profit = (Number(r.totalAmount)>0 && Number(r.actualCost)>0) ? Number(r.totalAmount)-Number(r.actualCost) : null;
+        const margin = profit!==null ? Math.round((profit/Number(r.totalAmount))*100) : null;
+        const Row = ({label, value, valueStyle})=> value ? (
+          <div style={{display:"flex",gap:12,padding:"8px 0",borderBottom:"1px solid #F3F4F6",alignItems:"flex-start"}}>
+            <span style={{fontSize:12,color:"#6B7280",flexShrink:0,width:110}}>{label}</span>
+            <span style={{fontSize:13,fontWeight:600,color:"#1A1A2E",...valueStyle}}>{value}</span>
+          </div>
+        ) : null;
+        return (
+          <div onClick={()=>setViewing(null)} style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,maxWidth:580,width:"100%",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+              {/* 모달 헤더 */}
+              <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #F3F4F6",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                <div>
+                  <h2 style={{margin:0,fontSize:18,fontWeight:900,color:"#1A1A2E"}}>{r.name}</h2>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:6}}>
+                    {r.year && <span style={{fontSize:11,color:"#6B7280",background:"#F3F4F6",padding:"2px 8px",borderRadius:20}}>{r.year}</span>}
+                    {r.client && <span style={{fontSize:11,color:"#6B7280",background:"#F3F4F6",padding:"2px 8px",borderRadius:20}}>{r.client}</span>}
+                    {r.videoType && <span style={{fontSize:11,color:"#6B9ECC",background:"rgba(107,158,204,0.1)",padding:"2px 8px",borderRadius:20}}>{r.videoType}</span>}
+                    {r.qualityGrade && <span style={{fontSize:11,color:"#34D399",background:"rgba(52,211,153,0.1)",padding:"2px 8px",borderRadius:20}}>{r.qualityGrade}등급</span>}
+                  </div>
+                </div>
+                <button onClick={()=>setViewing(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9CA3AF",lineHeight:1,flexShrink:0}}>×</button>
+              </div>
+
+              <div style={{padding:"16px 24px"}}>
+                {/* 재무 요약 카드 */}
+                {r.totalAmount && (
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
+                    <div style={{flex:1,minWidth:120,padding:"12px 14px",borderRadius:10,background:"rgba(200,16,46,0.06)",border:"1px solid rgba(200,16,46,0.15)",textAlign:"center"}}>
+                      <div style={{fontSize:10,color:"#6B7280",marginBottom:3}}>최종 견적액</div>
+                      <div style={{fontSize:16,fontWeight:900,color:"#C8102E"}}>₩{formatNum(Number(r.totalAmount))}</div>
+                    </div>
+                    {r.actualCost && <div style={{flex:1,minWidth:120,padding:"12px 14px",borderRadius:10,background:"#F8F9FA",border:"1px solid #E5E7EB",textAlign:"center"}}>
+                      <div style={{fontSize:10,color:"#6B7280",marginBottom:3}}>실 제작 비용</div>
+                      <div style={{fontSize:16,fontWeight:900,color:"#374151"}}>₩{formatNum(Number(r.actualCost))}</div>
+                    </div>}
+                    {profit!==null && <div style={{flex:1,minWidth:120,padding:"12px 14px",borderRadius:10,background:profit>=0?"rgba(52,211,153,0.08)":"rgba(239,68,68,0.06)",border:`1px solid ${profit>=0?"rgba(52,211,153,0.25)":"rgba(239,68,68,0.2)"}`,textAlign:"center"}}>
+                      <div style={{fontSize:10,color:"#6B7280",marginBottom:3}}>영업이익 (이익률)</div>
+                      <div style={{fontSize:16,fontWeight:900,color:profit>=0?"#059669":"#EF4444"}}>{profit>=0?"+":"-"}₩{formatNum(Math.abs(profit))}</div>
+                      <div style={{fontSize:11,fontWeight:700,color:margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444"}}>{margin}%</div>
+                    </div>}
+                  </div>
+                )}
+
+                {/* 상세 필드 */}
+                <Row label="영상 유형" value={r.videoType} />
+                <Row label="품질 등급" value={r.qualityGrade ? `${r.qualityGrade}등급` : null} />
+                <Row label="영상 길이" value={r.duration ? `${r.duration}초 (${r.fps||24}fps)` : null} />
+                <Row label="해상도" value={r.resolution ? (r.resolution.includes("3840")?"4K 3840×2160":"FHD 1920×1080") : null} />
+                <Row label="제작 기간" value={r.productionDays ? `${r.productionDays}일` : null} />
+                <Row label="클라이언트 난이도" value={r.clientDifficulty}
+                  valueStyle={{color: r.clientDifficulty==="매우 어려움"?"#EF4444":r.clientDifficulty==="어려움"?"#F59E0B":r.clientDifficulty==="쉬움"?"#34D399":"#374151"}} />
+                {((Number(r.charCount)||0)+(Number(r.propCount)||0)+(Number(r.bgCount)||0)) > 0 && (
+                  <Row label="에셋 구성" value={`캐릭터 ${r.charCount||0}종 · 프랍 ${r.propCount||0}종 · 배경 ${r.bgCount||0}종`} />
+                )}
+                {r.notes && <Row label="메모" value={r.notes} />}
+                {r.videoUrl && (
+                  <div style={{display:"flex",gap:12,padding:"10px 0",alignItems:"center"}}>
+                    <span style={{fontSize:12,color:"#6B7280",flexShrink:0,width:110}}>영상 링크</span>
+                    <a href={r.videoUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:13,color:"#3B82C4",textDecoration:"none",fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+                      🎬 영상 보기 →
+                    </a>
+                  </div>
+                )}
+
+                {/* 하단 버튼 */}
+                <div style={{display:"flex",gap:8,marginTop:20,paddingTop:16,borderTop:"1px solid #F3F4F6"}}>
+                  <button onClick={()=>{setEditing({...r});setViewing(null);}} style={{padding:"9px 18px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>✏️ 수정</button>
+                  <button onClick={()=>{del(r.id);setViewing(null);}} style={{padding:"9px 14px",borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.05)",color:"#EF4444",fontSize:13,cursor:"pointer"}}>🗑 삭제</button>
+                  <button onClick={()=>setViewing(null)} style={{marginLeft:"auto",padding:"9px 20px",borderRadius:8,border:"none",background:"#1A1A2E",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>닫기</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{marginTop:28,padding:"18px 20px",borderRadius:12,background:"#F8F9FA",border:"1px solid #E5E7EB"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
           <span style={{fontSize:15}}>⚙️</span>
