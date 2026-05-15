@@ -1769,7 +1769,7 @@ function calcSimilarity(ref, cur) {
 }
 
 /* ── 레퍼런스 탭 ──────────────────────────────────────────────────────── */
-const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",videoUrl:"",notes:""};
+const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",productionDays:"",clientDifficulty:"보통",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",videoUrl:"",notes:""};
 
 function ReferenceTab({refs, onChange}) {
   const [editing, setEditing] = React.useState(null); // null | ref object
@@ -1817,7 +1817,8 @@ function ReferenceTab({refs, onChange}) {
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
             {[
               ["프로젝트명 *","name","text"],["클라이언트","client","text"],["연도","year","number"],
-              ["영상 길이 (초)","duration","number"],["캐릭터 수 (합계)","charCount","number"],
+              ["영상 길이 (초)","duration","number"],["제작 기간 (일)","productionDays","number"],
+              ["캐릭터 수 (합계)","charCount","number"],
               ["프랍 수 (합계)","propCount","number"],["배경 수 (합계)","bgCount","number"],
               ["최종 견적액 (원)","totalAmount","number"],
             ].map(([label,field,type])=>(
@@ -1831,6 +1832,12 @@ function ReferenceTab({refs, onChange}) {
               <select value={editing.videoType} onChange={e=>setEditing(v=>({...v,videoType:e.target.value}))} style={inp}>
                 <option value="">선택</option>
                 {VIDEO_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:4}}>
+              <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>클라이언트 난이도</span>
+              <select value={editing.clientDifficulty||"보통"} onChange={e=>setEditing(v=>({...v,clientDifficulty:e.target.value}))} style={inp}>
+                {["쉬움","보통","어려움","매우 어려움"].map(d=><option key={d} value={d}>{d}</option>)}
               </select>
             </label>
             <label style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -1885,6 +1892,12 @@ function ReferenceTab({refs, onChange}) {
                   </div>
                   <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:12,color:"#6B7280"}}>
                     {r.duration && <span>⏱ {r.duration}초 ({r.fps||24}fps)</span>}
+                    {r.productionDays && <span>📅 제작 {r.productionDays}일</span>}
+                    {r.clientDifficulty && r.clientDifficulty!=="보통" && (
+                      <span style={{color: r.clientDifficulty==="매우 어려움"?"#EF4444":r.clientDifficulty==="어려움"?"#F59E0B":"#34D399"}}>
+                        🧑‍💼 난이도: {r.clientDifficulty}
+                      </span>
+                    )}
                     {(Number(r.charCount)||0)+(Number(r.propCount)||0)+(Number(r.bgCount)||0) > 0 && (
                       <span>👤 캐릭터 {r.charCount||0} · 프랍 {r.propCount||0} · 배경 {r.bgCount||0}</span>
                     )}
@@ -1948,6 +1961,12 @@ function SimilarityModal({matches, onProceed, onCancel}) {
                     <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:"#6B7280"}}>
                       {ref.videoType && <span>📹 {ref.videoType}</span>}
                       {ref.duration && <span>⏱ {ref.duration}초</span>}
+                      {ref.productionDays && <span>📅 제작 {ref.productionDays}일</span>}
+                      {ref.clientDifficulty && ref.clientDifficulty!=="보통" && (
+                        <span style={{color: ref.clientDifficulty==="매우 어려움"?"#EF4444":ref.clientDifficulty==="어려움"?"#F59E0B":"#34D399"}}>
+                          🧑‍💼 {ref.clientDifficulty}
+                        </span>
+                      )}
                       {ref.qualityGrade && <span>⭐ {ref.qualityGrade}등급</span>}
                       {assets > 0 && <span>👤 에셋 {assets}종</span>}
                       {ref.fps && <span>🎬 {ref.fps}fps</span>}
