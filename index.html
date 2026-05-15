@@ -1995,6 +1995,77 @@ function ReferenceTab({refs, onChange}) {
               </div>
             ))}
           </div>}
+
+      {/* 자동 단가 조정 안내 */}
+      <div style={{marginTop:28,padding:"18px 20px",borderRadius:12,background:"#F8F9FA",border:"1px solid #E5E7EB"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+          <span style={{fontSize:15}}>⚙️</span>
+          <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#1A1A2E"}}>레퍼런스 기반 자동 단가 조정 안내</h3>
+        </div>
+
+        {/* 동작 흐름 */}
+        <div style={{display:"flex",gap:0,flexWrap:"wrap",marginBottom:16,alignItems:"center"}}>
+          {[
+            ["⚡","자동계산 클릭"],
+            ["→",""],
+            ["🔍","유사 레퍼런스 탐색\n(유사도 40점 이상)"],
+            ["→",""],
+            ["📋","모달에서 과거 실적 확인"],
+            ["→",""],
+            ["✅","참고 완료 클릭"],
+            ["→",""],
+            ["📊","이익률 분석 후\n단가 자동 조정"],
+          ].map(([icon, label], i) =>
+            icon === "→"
+              ? <span key={i} style={{fontSize:16,color:"#D1D5DB",margin:"0 6px"}}>→</span>
+              : <div key={i} style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:600,color:"#374151",textAlign:"center",whiteSpace:"pre-line",lineHeight:1.4}}>{icon} {label}</div>
+          )}
+        </div>
+
+        {/* 조정 로직 */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:8}}>조정 기준</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"#6B7280"}}>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <span style={{color:"#C8102E",fontWeight:700,flexShrink:0}}>①</span>
+              <span><strong style={{color:"#374151"}}>대상 레퍼런스</strong> — 유사도 40점 이상이면서 <em>최종 견적액</em>과 <em>실 제작 비용</em>이 모두 입력된 항목만 분석합니다.</span>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <span style={{color:"#C8102E",fontWeight:700,flexShrink:0}}>②</span>
+              <span><strong style={{color:"#374151"}}>가중 평균 이익률 계산</strong> — 유사도 점수를 가중치로 삼아 평균 이익률을 산출합니다. 유사도가 높을수록 해당 레퍼런스의 영향이 커집니다.</span>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <span style={{color:"#C8102E",fontWeight:700,flexShrink:0}}>③</span>
+              <span><strong style={{color:"#374151"}}>목표 이익률 25%</strong> — 평균 이익률이 25% 미만일 때만 상향 조정이 적용됩니다. 이미 25% 이상이면 조정 없음.</span>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <span style={{color:"#C8102E",fontWeight:700,flexShrink:0}}>④</span>
+              <span><strong style={{color:"#374151"}}>조정 폭</strong> — 부족분의 80%를 단가에 반영하며, 최대 40%까지만 올립니다. 과도한 상향을 방지하기 위한 상한선입니다.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 계산 예시 */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:8}}>계산 예시</div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {[
+              {label:"이익률 5% (목표 대비 20%p 부족)", result:"단가 16% 상향", color:"#F59E0B", bg:"rgba(245,158,11,0.08)"},
+              {label:"이익률 -10% (적자, 35%p 부족)", result:"단가 28% 상향", color:"#EF4444", bg:"rgba(239,68,68,0.08)"},
+              {label:"이익률 30% (목표 초과)", result:"조정 없음", color:"#34D399", bg:"rgba(52,211,153,0.08)"},
+            ].map(({label, result, color, bg})=>(
+              <div key={label} style={{flex:"1 1 180px",padding:"10px 14px",borderRadius:8,background:bg,border:`1px solid ${color}33`}}>
+                <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{label}</div>
+                <div style={{fontSize:13,fontWeight:800,color}}>{result}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{fontSize:11,color:"#9CA3AF",borderTop:"1px solid #E5E7EB",paddingTop:10}}>
+          💡 조정된 단가는 견적 탭에서 항목별로 확인하고 수동 수정할 수 있습니다. 단가 조정 시 상단에 주황색 배너가 표시되며, 배너의 × 버튼으로 알림을 닫을 수 있습니다.
+        </div>
+      </div>
     </div>
   );
 }
