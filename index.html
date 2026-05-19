@@ -1927,7 +1927,7 @@ function ReferenceTab({refs, onChange}) {
                 const totalCost = Number(editing.internalCost||0) + Number(editing.externalCost||0);
                 const profit = Number(editing.totalAmount) - totalCost;
                 const margin = Math.round((profit / Number(editing.totalAmount)) * 100);
-                return (
+                return (<>
                   <div style={{marginTop:12,padding:"10px 14px",borderRadius:8,background:"#F8F9FA",border:"1px solid #E5E7EB",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
                     <span style={{fontSize:12,color:"#6B7280"}}>내부 {Number(editing.internalCost||0)>0?`₩${formatNum(Number(editing.internalCost))}`:"—"}</span>
                     <span style={{color:"#D1D5DB"}}>+</span>
@@ -1941,7 +1941,7 @@ function ReferenceTab({refs, onChange}) {
                     <span style={{fontSize:12,color:"#6B7280"}}>이익률</span>
                     <span style={{fontWeight:700,fontSize:13,color:margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444"}}>{margin}%</span>
                   </div>
-                );
+                </>);
               })()}
               <div style={{display:"flex",gap:8,marginTop:16,paddingTop:16,borderTop:"1px solid #F3F4F6"}}>
                 <button onClick={save} style={{padding:"9px 24px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>저장</button>
