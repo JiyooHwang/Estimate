@@ -1,0 +1,2568 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LOCUS — Schedule & Quote Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.9/babel.min.js" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: #F4F5F7; color: #1A1A2E; -webkit-font-smoothing: antialiased; }
+  input, select, textarea, button { font-family: inherit; }
+  input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #F4F5F7; }
+  ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+  @media print { .no-print { display: none !important; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useCallback, useRef, useEffect } = React;
+const PHASE_CATEGORIES = [
+  { id:"management", label:"Management", color:"#FF6B35",
+    phases:[
+      {id:"pd",label:"PD",color:"#FF6B35"},
+      {id:"director",label:"Director",color:"#FF8C5A"},
+      {id:"supervisor",label:"Supervisor",color:"#FFB085"},
+      {id:"art_director",label:"Art Director",color:"#FBBF24"},
+      {id:"sub_director",label:"조감독",color:"#FCD34D"},
+      {id:"coordinator",label:"코디네이터",color:"#FDE68A"}]},
+  { id:"preproduction", label:"PreProduction", color:"#A78BFA",
+    phases:[
+      {id:"design",label:"Design",color:"#A78BFA"},
+      {id:"storyboard_reel",label:"StoryBoard Reel",color:"#C4B5FD"}]},
+  { id:"mainproduction", label:"MainProduction", color:"#34D399",
+    phases:[
+      {id:"modeling",label:"Modeling",color:"#34D399"},
+      {id:"texture_shading",label:"Texture / Shading",color:"#6EE7B7"},
+      {id:"rigging",label:"Rigging",color:"#059669"},
+      {id:"animation_lead",label:"Animator Lead",color:"#0EA5E9"},
+      {id:"animation_main",label:"Animation",color:"#6B9ECC"},
+      {id:"lighting_lead",label:"Lighting Lead",color:"#D97706"},
+      {id:"lighting_render",label:"Lighting & Render",color:"#F59E0B"},
+      {id:"simulation",label:"Simulation",color:"#FCD34D"},
+      {id:"fx",label:"FX",color:"#F472B6"},
+      {id:"motion_graphic",label:"Motion Graphic",color:"#EC4899"},
+      {id:"unreal",label:"Unreal",color:"#7C3AED"},
+      {id:"composition",label:"Composition",color:"#FB7185"}]},
+  { id:"postproduction", label:"PostProduction", color:"#6B9ECC",
+    phases:[
+      {id:"edit",label:"Edit",color:"#6B9ECC"},
+      {id:"color_grading",label:"Color Grading",color:"#93C5FD"},
+      {id:"sound_post",label:"Sound (Dub, Music, SFX, Mix)",color:"#A5B4FC"}]}
+];
+const ALL_PHASES = PHASE_CATEGORIES.flatMap(c=>c.phases.map(p=>({...p,categoryId:c.id,categoryLabel:c.label,categoryColor:c.color})));
+const getPhase = id => ALL_PHASES.find(p=>p.id===id);
+
+const ROLE_CATEGORIES = [
+  { id:"management", label:"Management", color:"#FF6B35",
+    roles:[
+      {id:"pd",label:"PD",unit:"일",defaultRate:504000},
+      {id:"director",label:"Director",unit:"일",defaultRate:504000},
+      {id:"supervisor",label:"Supervisor",unit:"일",defaultRate:504000},
+      {id:"art_director",label:"Art Director",unit:"일",defaultRate:406000},
+      {id:"sub_director",label:"조감독",unit:"일",defaultRate:406000},
+      {id:"coordinator",label:"코디네이터",unit:"일",defaultRate:406000}]},
+  { id:"preproduction", label:"PreProduction", color:"#A78BFA",
+    roles:[
+      {id:"storyboard_artist",label:"StoryBoard Artist",unit:"일",defaultRate:406000},
+      {id:"designer",label:"Designer",unit:"일",defaultRate:406000}]},
+  { id:"mainproduction", label:"MainProduction", color:"#34D399",
+    roles:[
+      {id:"modeler",label:"Modeler",unit:"일",defaultRate:406000},
+      {id:"texture_shading",label:"Texture/Shading Artist",unit:"일",defaultRate:406000},
+      {id:"rigger",label:"Rigger",unit:"일",defaultRate:406000},
+      {id:"animation_lead",label:"Animator Lead",unit:"일",defaultRate:406000},
+      {id:"animator",label:"Animator",unit:"일",defaultRate:406000},
+      {id:"lighting_lead",label:"Lighting Lead",unit:"일",defaultRate:406000},
+      {id:"lighting_render",label:"Lighting & Render Artist",unit:"일",defaultRate:406000},
+      {id:"simulator",label:"Simulator",unit:"일",defaultRate:406000},
+      {id:"fx_artist",label:"FX Artist",unit:"일",defaultRate:406000},
+      {id:"motion_graphic_artist",label:"Motion Graphic Artist",unit:"일",defaultRate:406000},
+      {id:"unreal_artist",label:"Unreal Artist",unit:"일",defaultRate:406000},
+      {id:"compositor",label:"Compositor",unit:"일",defaultRate:406000}]},
+  { id:"postproduction", label:"PostProduction", color:"#6B9ECC",
+    roles:[
+      {id:"editor",label:"Edit",unit:"일",defaultRate:406000},
+      {id:"colorist",label:"Color Grading",unit:"일",defaultRate:406000},
+      {id:"sound",label:"Sound (Dub, Music, SFX, Mix)",unit:"일",defaultRate:406000}]},
+  { id:"overhead", label:"Overhead & Misc.", color:"#F59E0B",
+    roles:[
+      {id:"software_hardware",label:"Software / Hardware",unit:"식",defaultRate:0},
+      {id:"render_farm",label:"Render Farm",unit:"식",defaultRate:0},
+      {id:"office",label:"Office Maintenance",unit:"식",defaultRate:0},
+      {id:"contingency",label:"Contingency (5%)",unit:"식",defaultRate:0,isContingency:true}]}
+];
+const ALL_ROLES = ROLE_CATEGORIES.flatMap(c=>c.roles.map(r=>({...r,categoryId:c.id,categoryLabel:c.label,categoryColor:c.color})));
+const getRole = id => ALL_ROLES.find(r=>r.id===id);
+
+const PHASE_ROLE_MAP = {
+  pd:"pd", director:"director", supervisor:"supervisor",
+  art_director:"art_director", sub_director:"sub_director", coordinator:"coordinator",
+  storyboard_reel:"storyboard_artist", design:"designer",
+  modeling:"modeler", texture_shading:"texture_shading", rigging:"rigger",
+  animation_lead:"animation_lead", animation_main:"animator",
+  lighting_lead:"lighting_lead", lighting_render:"lighting_render",
+  simulation:"simulator", fx:"fx_artist", motion_graphic:"motion_graphic_artist", unreal:"unreal_artist", composition:"compositor",
+  edit:"editor", color_grading:"colorist", sound_post:"sound"
+};
+
+const VIDEO_TYPES = ["Game Cinematic","3D 애니메이션"];
+const formatNum = n => new Intl.NumberFormat("ko-KR").format(n);
+const DAY_MS = 86400000;
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
+function daysBetween(a,b) { return Math.round((new Date(b)-new Date(a))/DAY_MS); }
+
+function syncQuoteFromSchedule(schedulePhases, quoteItems) {
+  // Update days for existing linked items
+  const updated = quoteItems.map(item => {
+    const role = getRole(item.roleId);
+    if (!role || role.isContingency || item.unit !== "일") return item;
+    const linkedPhaseId = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===item.roleId)?.[0];
+    if (!linkedPhaseId) return item;
+    const phase = schedulePhases.find(p=>p.phaseId===linkedPhaseId);
+    if (!phase?.startDate || !phase?.endDate) return item;
+    const days = daysBetween(phase.startDate, phase.endDate);
+    const hcMatch = phase.assignee?.match(/^(\d+)명$/);
+    const updates = {};
+    if (days > 0) updates.days = days;
+    if (hcMatch) updates.headcount = Number(hcMatch[1]);
+    return Object.keys(updates).length ? {...item, ...updates} : item;
+  });
+  // Auto-add quote items for newly added phases
+  const newItems = [];
+  schedulePhases.forEach(phase => {
+    const roleId = PHASE_ROLE_MAP[phase.phaseId];
+    if (!roleId) return;
+    if (updated.find(i=>i.roleId===roleId)) return;
+    const role = getRole(roleId);
+    if (!role) return;
+    const days = phase.startDate && phase.endDate ? Math.max(1, daysBetween(phase.startDate, phase.endDate)) : 1;
+    newItems.push({
+      id: Date.now() + newItems.length,
+      roleId: role.id, label: role.label,
+      headcount: 1, days, utilization: 100,
+      rate: role.defaultRate, unit: role.unit, categoryId: role.categoryId
+    });
+  });
+  return [...updated, ...newItems];
+}
+
+function downloadPDF(project, schedule, quote) {
+  const win = window.open("","_blank");
+  if (!win) { alert("팝업 차단을 해제하세요."); return; }
+
+  const calcLine = item => {
+    const role = getRole(item.roleId);
+    if (role?.isContingency) return 0;
+    if (item.unit!=="일") return Number(item.headcount||1)*Number(item.days||item.qty||1)*Number(item.rate||0);
+    return Number(item.headcount||1)*Number(item.days||item.qty||1)*(Number(item.utilization??100)/100)*Number(item.rate||0);
+  };
+  const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+calcLine(i),0);
+  const sub = quote.items.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
+  const disc = sub*(Number(quote.discountPct)/100);
+  const afterDisc = sub-disc;
+  const vat = afterDisc*(quote.includeVat?0.1:0);
+  const total = afterDisc+vat;
+  const fmt = n => new Intl.NumberFormat("ko-KR").format(Math.round(n));
+  const today = new Date().toLocaleDateString("ko-KR");
+
+  /* ── 간트 SVG (바 형태 개선) ── */
+  const ganttHTML = (() => {
+    const withDates = schedule.phases.filter(p=>p.startDate&&p.endDate);
+    if (withDates.length === 0) return "";
+
+    const gStart = Math.min(...withDates.map(p=>new Date(p.startDate).getTime()));
+    const gEnd   = Math.max(...withDates.map(p=>new Date(p.endDate).getTime()));
+    const totalMs = gEnd - gStart || 1;
+
+    const months = [];
+    let cur = new Date(gStart); cur.setDate(1);
+    while (cur.getTime() <= gEnd) {
+      months.push(new Date(cur));
+      cur = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
+    }
+
+    const LABEL_W = 150, BAR_AREA = 430, ROW_H = 24, HDR_H = 22, W = LABEL_W + BAR_AREA;
+
+    const rows = [];
+    PHASE_CATEGORIES.forEach(cat=>{
+      const cp = schedule.phases.filter(p=>getPhase(p.phaseId)?.categoryId===cat.id);
+      if (!cp.length) return;
+      rows.push({type:"cat",cat});
+      cp.forEach(p=>rows.push({type:"phase",p,cat}));
+    });
+
+    const totalH = HDR_H + rows.length * ROW_H + 4;
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${totalH}" style="display:block;font-family:Arial,sans-serif;">`;
+    svg += `<rect width="${W}" height="${totalH}" fill="#fff" rx="4" stroke="#E5E7EB" stroke-width="1"/>`;
+    svg += `<rect x="${LABEL_W}" y="0" width="${BAR_AREA}" height="${HDR_H}" fill="#F4F5F7"/>`;
+    svg += `<line x1="${LABEL_W}" y1="0" x2="${LABEL_W}" y2="${totalH}" stroke="#E5E7EB" stroke-width="1"/>`;
+
+    months.forEach(m=>{
+      const x = (LABEL_W + ((m.getTime()-gStart)/totalMs)*BAR_AREA).toFixed(1);
+      if (parseFloat(x) > LABEL_W) svg += `<line x1="${x}" y1="${HDR_H}" x2="${x}" y2="${totalH}" stroke="#F0F0F0" stroke-width="1"/>`;
+      const lbl = `${m.getFullYear().toString().slice(2)}/${String(m.getMonth()+1).padStart(2,"0")}`;
+      svg += `<text x="${(parseFloat(x)+3).toFixed(1)}" y="${HDR_H-6}" font-size="8" fill="#6B7280" font-weight="600">${lbl}</text>`;
+    });
+
+    rows.forEach((row, ri) => {
+      const y = HDR_H + ri * ROW_H;
+      if (row.type==="cat") {
+        svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${row.cat.color}20"/>`;
+        svg += `<text x="8" y="${y+ROW_H-7}" font-size="9" fill="${row.cat.color}" font-weight="700">${row.cat.label.toUpperCase()}</text>`;
+        svg += `<line x1="0" y1="${y+ROW_H}" x2="${W}" y2="${y+ROW_H}" stroke="#E5E7EB" stroke-width="0.5"/>`;
+      } else {
+        const {p} = row;
+        const ph = getPhase(p.phaseId);
+        svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${ri%2===0?"#fff":"#FAFAFA"}"/>`;
+        svg += `<line x1="0" y1="${y+ROW_H}" x2="${W}" y2="${y+ROW_H}" stroke="#F3F4F6" stroke-width="0.5"/>`;
+        svg += `<text x="${LABEL_W-6}" y="${y+ROW_H-8}" font-size="9" fill="#374151" text-anchor="end">${ph?.label||""}</text>`;
+        if (p.startDate && p.endDate) {
+          const lPct = (new Date(p.startDate).getTime()-gStart)/totalMs;
+          const wPct = (new Date(p.endDate).getTime()-new Date(p.startDate).getTime())/totalMs;
+          const bx = (LABEL_W + lPct*BAR_AREA).toFixed(1);
+          const bw = Math.max(4, wPct*BAR_AREA).toFixed(1);
+          const dur = Math.round((new Date(p.endDate)-new Date(p.startDate))/86400000);
+          svg += `<rect x="${bx}" y="${y+4}" width="${bw}" height="${ROW_H-9}" rx="3" fill="${ph?.color||"#888"}" opacity="0.9"/>`;
+          if (parseFloat(bw)>28) svg += `<text x="${(parseFloat(bx)+parseFloat(bw)/2).toFixed(1)}" y="${y+ROW_H-8}" font-size="7.5" fill="white" font-weight="700" text-anchor="middle">${dur}d</text>`;
+          if (p.assignee && parseFloat(bw)>50) svg += `<text x="${(parseFloat(bx)+parseFloat(bw)+4).toFixed(1)}" y="${y+ROW_H-8}" font-size="7" fill="#9CA3AF">${p.assignee}</text>`;
+        }
+      }
+    });
+    svg += `</svg>`;
+    return `<div class="section"><div class="section-title">Production Schedule — Gantt Chart</div><div style="overflow:hidden;border-radius:6px;border:1px solid #E5E7EB">${svg}</div></div>`;
+  })();
+
+  /* ── 스케줄 테이블 ── */
+  const schedRows = schedule.phases.map(p=>{
+    const ph = ALL_PHASES.find(x=>x.id===p.phaseId);
+    const days = p.startDate&&p.endDate ? Math.round((new Date(p.endDate)-new Date(p.startDate))/86400000) : "-";
+    return `<tr><td>${ph?.categoryLabel||""}</td><td>${ph?.label||p.phaseId}</td><td>${p.startDate||"-"}</td><td>${p.endDate||"-"}</td><td>${days!=="-"?days+"일":"-"}</td><td>${p.assignee||"-"}</td></tr>`;
+  }).join("");
+
+  /* ── 견적 테이블 ── */
+  const quoteRows = quote.items.map(item=>{
+    const r = getRole(item.roleId);
+    const amt = r?.isContingency ? prodSub*0.05 : calcLine(item);
+    const qtyStr = r?.isContingency ? "5% auto"
+      : (item.unit==="일" ? `${item.headcount||1}명×${item.utilization??100}%×${item.days||item.qty||1}일` : `${item.headcount||1}×${item.days||item.qty||1}${item.unit}`);
+    return `<tr><td>${r?.categoryLabel||""}</td><td>${item.label}</td><td>${qtyStr}</td><td>${r?.isContingency?"-":"₩"+fmt(item.rate)}</td><td>₩${fmt(amt)}</td></tr>`;
+  }).join("");
+
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${project.name||"견적서"} - LOCUS</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR',sans-serif;color:#111;background:#fff;padding:40px;font-size:13px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #C8102E;padding-bottom:20px;margin-bottom:28px}
+.doc-title h1{font-size:22px;font-weight:900;color:#C8102E}
+.doc-title .meta{font-size:11px;color:#666;margin-top:4px}
+.company{font-size:11px;color:#666;margin-top:4px}
+.section{margin-bottom:28px}
+.section-title{font-size:13px;font-weight:700;color:#C8102E;text-transform:uppercase;letter-spacing:.08em;border-left:3px solid #C8102E;padding-left:8px;margin-bottom:12px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px}
+.info-row{display:flex;gap:8px;font-size:12px}
+.info-label{color:#888;min-width:80px}
+.info-value{font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#1a1a2e;color:#fff;padding:8px 10px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+td{padding:7px 10px;border-bottom:1px solid #eee}
+tr:nth-child(even) td{background:#f9f9f9}
+.totals{margin-left:auto;width:280px}
+.total-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #eee}
+.total-final{display:flex;justify-content:space-between;padding:10px 0;font-size:16px;font-weight:900;color:#C8102E;border-top:2px solid #C8102E;margin-top:4px}
+.footer{margin-top:40px;border-top:1px solid #eee;padding-top:16px;font-size:11px;color:#aaa;display:flex;justify-content:space-between}
+@media print{body{padding:20px}@page{size:A4;margin:15mm}}
+</style></head><body>
+<div class="header">
+  <div><div style="font-size:18px;font-weight:900;color:#C8102E">LOCUS</div><div class="company">Animation Studio — Schedule &amp; Quote</div></div>
+  <div class="doc-title"><h1>${project.name||"프로젝트명 미입력"}</h1>
+  <div class="meta">Client: ${project.client||"-"} &nbsp;|&nbsp; Date: ${today}</div></div>
+</div>
+<div class="section"><div class="section-title">Project Overview</div>
+<div class="info-grid">${[["Project",project.name],["Client",project.client],["PD",project.manager],["Type",project.videoType],["Duration",project.duration?project.duration+"초":"-"],["FPS",project.fps?project.fps+" fps":"-"],["Resolution",project.resolution],["Format",project.format],["Revisions",project.revisions?project.revisions+"회":"-"],["Deadline",project.deadline||"-"]].map(([k,v])=>`<div class="info-row"><span class="info-label">${k}</span><span class="info-value">${v||"-"}</span></div>`).join("")}
+</div></div>
+${ganttHTML}
+${schedule.phases.length>0?`<div class="section"><div class="section-title">Schedule Details</div><table><thead><tr><th>Category</th><th>Phase</th><th>Start</th><th>End</th><th>Days</th><th>Assignee</th></tr></thead><tbody>${schedRows}</tbody></table></div>`:""}
+${quote.items.length>0?`<div class="section"><div class="section-title">Cost Breakdown</div>
+<p style="font-size:10px;color:#888;margin-bottom:8px">소계 = 인원 × 투입률 × 일수 × 단가</p>
+<table><thead><tr><th>Category</th><th>Item</th><th>인원×투입률×일수</th><th>Unit Rate</th><th>Amount</th></tr></thead><tbody>${quoteRows}</tbody></table>
+<div style="margin-top:20px"><div class="totals">
+<div class="total-row"><span>Subtotal</span><span>₩${fmt(sub)}</span></div>
+${Number(quote.discountPct)>0?`<div class="total-row"><span>Discount (${quote.discountPct}%)</span><span>-₩${fmt(disc)}</span></div>`:""}
+${quote.includeVat?`<div class="total-row"><span>VAT (10%)</span><span>₩${fmt(vat)}</span></div>`:""}
+<div class="total-final"><span>TOTAL</span><span>₩${fmt(total)}</span></div>
+</div></div></div>`:""}
+<div class="footer"><span>LOCUS Animation Studio &copy; ${new Date().getFullYear()}</span><span>Generated on ${today}</span></div>
+<script>window.onload=()=>{window.print();}<\/script>
+</body></html>`);
+  win.document.close();
+}
+
+/* ── 데이터 ───────────────────────────────────────────────────────────── */
+
+/* ── 공통 UI ─────────────────────────────────────────────────────────── */
+function Tag({children, color, onRemove}) {
+  return (
+    <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 10px",borderRadius:99,background:color+"22",border:`1px solid ${color}55`,color,fontSize:12,fontWeight:600}}>
+      {children}
+      {onRemove && <button onClick={onRemove} style={{background:"none",border:"none",cursor:"pointer",color,lineHeight:1,padding:0,fontSize:13}}>×</button>}
+    </span>
+  );
+}
+function Card({children, style={}}) {
+  return <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:16,padding:"24px 28px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)",...style}}>{children}</div>;
+}
+function FInput({label, style:extStyle, ...props}) {
+  return (
+    <label style={{display:"flex",flexDirection:"column",gap:6}}>
+      {label && <span style={{fontSize:12,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span>}
+      <input {...props} style={{background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:10,padding:"10px 14px",color:"#1A1A2E",fontSize:14,outline:"none",transition:"border-color 0.2s",...extStyle}}
+        onFocus={e=>e.target.style.borderColor="#C8102E"} onBlur={e=>e.target.style.borderColor="#E5E7EB"} />
+    </label>
+  );
+}
+function FSelect({label, children, style:extStyle, ...props}) {
+  return (
+    <label style={{display:"flex",flexDirection:"column",gap:6}}>
+      {label && <span style={{fontSize:12,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span>}
+      <select {...props} style={{background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:10,padding:"10px 14px",color:"#1A1A2E",fontSize:14,outline:"none",cursor:"pointer",...extStyle}}>
+        {children}
+      </select>
+    </label>
+  );
+}
+function ProjectInfoTab({project, onChange}) {
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      <Card>
+        <h3 style={{margin:"0 0 18px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>📁 프로젝트 정보</h3>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+          <FInput label="프로젝트명" value={project.name} onChange={e=>onChange("name",e.target.value)} placeholder="예: OO브랜드 론칭 영상" style={{gridColumn:"1 / -1"}} />
+          <FInput label="클라이언트" value={project.client} onChange={e=>onChange("client",e.target.value)} placeholder="클라이언트명" />
+          <FInput label="담당 PD" value={project.manager} onChange={e=>onChange("manager",e.target.value)} placeholder="담당자 이름" />
+          <FInput label="의뢰일" type="date" value={project.startDate} onChange={e=>onChange("startDate",e.target.value)} />
+          <FInput label="납품 기한" type="date" value={project.deadline} onChange={e=>onChange("deadline",e.target.value)} />
+          <FSelect label="영상 유형" value={project.videoType} onChange={e=>onChange("videoType",e.target.value)} style={{gridColumn:"1 / -1"}}>
+            <option value="">선택하세요</option>
+            {VIDEO_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+          </FSelect>
+          <label style={{display:"flex",alignItems:"center",gap:12,gridColumn:"1 / -1",padding:"12px 16px",borderRadius:10,border:`2px solid ${project.isUnreal?"#7C3AED":"#E5E7EB"}`,background:project.isUnreal?"#7C3AED11":"#F8F9FA",cursor:"pointer",transition:"all 0.15s"}}
+            onClick={()=>onChange("isUnreal",!project.isUnreal)}>
+            <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${project.isUnreal?"#7C3AED":"#D1D5DB"}`,background:project.isUnreal?"#7C3AED":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+              {project.isUnreal && <span style={{color:"#fff",fontSize:14,fontWeight:900,lineHeight:1}}>✓</span>}
+            </div>
+            <div>
+              <div style={{fontSize:14,fontWeight:700,color:project.isUnreal?"#7C3AED":"#374151"}}>🎮 Unreal Engine 프로젝트</div>
+              <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>체크 시 자동 계산에 Unreal 단계가 포함됩니다</div>
+            </div>
+          </label>
+          <label style={{display:"flex",flexDirection:"column",gap:6,gridColumn:"1 / -1"}}>
+            <span style={{fontSize:12,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em"}}>프로젝트 설명</span>
+            <textarea value={project.description} onChange={e=>onChange("description",e.target.value)} rows={3} placeholder="프로젝트 개요 및 요구사항"
+              style={{background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:10,padding:"10px 14px",color:"#1A1A2E",fontSize:14,outline:"none",resize:"vertical"}} />
+          </label>
+        </div>
+      </Card>
+      <Card>
+        <h3 style={{margin:"0 0 18px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>🎬 영상 사양</h3>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+          <FInput label="총 길이 (초)" type="number" value={project.duration} onChange={e=>onChange("duration",e.target.value)} placeholder="60" />
+          <FSelect label="해상도" value={project.resolution} onChange={e=>onChange("resolution",e.target.value)}>
+            <option value="1920x1080">FHD (1920×1080)</option>
+            <option value="3840x2160">4K (3840×2160)</option>
+            <option value="1280x720">HD (1280×720)</option>
+            <option value="1080x1080">인스타 (1080×1080)</option>
+            <option value="1080x1920">쇼츠/릴스 (1080×1920)</option>
+          </FSelect>
+          <FSelect label="납품 포맷" value={project.format} onChange={e=>onChange("format",e.target.value)}>
+            <option value="mp4_h264">MP4 (H.264)</option>
+            <option value="mp4_h265">MP4 (H.265)</option>
+            <option value="mov_prores">MOV (ProRes)</option>
+            <option value="gif">GIF</option>
+          </FSelect>
+          <FSelect label="FPS" value={project.fps} onChange={e=>onChange("fps",e.target.value)}>
+            <option value="24">24 fps</option>
+            <option value="30">30 fps</option>
+            <option value="60">60 fps</option>
+          </FSelect>
+          <FInput label="수정 횟수" type="number" value={project.revisions} onChange={e=>onChange("revisions",e.target.value)} placeholder="3" />
+          <FInput label="음악" value={project.music} onChange={e=>onChange("music",e.target.value)} placeholder="라이선스 / BGM 제작" />
+          <FInput label="자막" value={project.subtitle} onChange={e=>onChange("subtitle",e.target.value)} placeholder="한국어 / 영어 / 없음" />
+        </div>
+      </Card>
+      <Card>
+        <h3 style={{margin:"0 0 18px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>⭐ 퀄리티 등급 & 에셋 구성</h3>
+        <div style={{marginBottom:14}}>
+          <span style={{fontSize:12,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em"}}>퀄리티 등급</span>
+          <div style={{display:"flex",gap:10,marginTop:8}}>
+            {["S","A","B"].map(g=>{
+              const colors={S:"#C8102E",A:"#F59E0B",B:"#34D399"};
+              const sel = (project.qualityGrade||"A")===g;
+              return (
+                <button key={g} onClick={()=>onChange("qualityGrade",g)}
+                  style={{flex:1,padding:"12px",borderRadius:10,border:`2px solid ${sel?colors[g]:"#E5E7EB"}`,background:sel?colors[g]+"18":"#F8F9FA",color:sel?colors[g]:"#6B7280",fontWeight:800,fontSize:18,cursor:"pointer",transition:"all 0.15s"}}>
+                  {g}
+                  <div style={{fontSize:10,fontWeight:400,marginTop:2}}>{g==="S"?"최고급":g==="A"?"표준":"경제형"}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {/* 에셋 난이도별 수량 */}
+        <div style={{marginTop:4}}>
+          <div style={{display:"grid",gridTemplateColumns:"72px 1fr 1fr 1fr",gap:6,marginBottom:6,paddingBottom:4,borderBottom:"1px solid #E5E7EB"}}>
+            <span />
+            {["S","A","B"].map(g=>{
+              const c={S:"#C8102E",A:"#F59E0B",B:"#34D399"}[g];
+              return <span key={g} style={{fontSize:11,fontWeight:800,color:c,textAlign:"center"}}>{g} 등급</span>;
+            })}
+          </div>
+          {[
+            {label:"캐릭터", keys:["charS","charA","charB"]},
+            {label:"프랍",   keys:["propS","propA","propB"]},
+            {label:"배경",   keys:["bgS",  "bgA",  "bgB"  ]},
+          ].map(({label,keys})=>(
+            <div key={label} style={{display:"grid",gridTemplateColumns:"72px 1fr 1fr 1fr",gap:6,marginBottom:6,alignItems:"center"}}>
+              <span style={{fontSize:12,fontWeight:700,color:"#374151"}}>{label}</span>
+              {keys.map(k=>(
+                <input key={k} type="number" min="0" value={project[k]??0}
+                  onChange={e=>onChange(k,e.target.value)}
+                  style={{background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:8,padding:"7px 10px",color:"#1A1A2E",fontSize:14,outline:"none",textAlign:"center",width:"100%"}} />
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop:12,fontSize:11,color:"#9CA3AF"}}>※ 기준표 탭의 데이터를 바탕으로 스케줄 탭에서 자동 계산합니다</div>
+      </Card>
+    </div>
+  );
+}
+
+/* ── 간트 차트 ────────────────────────────────────────────────────────── */
+function GanttChart({phases, ganttStart, ganttEnd, onUpdate}) {
+  const containerRef = useRef(null);
+  const dragRef = useRef(null);
+  const totalDays = Math.max(1, daysBetween(ganttStart, ganttEnd));
+
+  const months = [];
+  let cur = new Date(ganttStart);
+  const end = new Date(ganttEnd);
+  while (cur <= end) {
+    months.push(new Date(cur));
+    cur = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
+  }
+
+  const handleMouseDown = (e, phaseId, type) => {
+    e.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const startX = e.clientX;
+    const phase = phases.find(p=>p.id===phaseId);
+    const origStart = phase.startDate;
+    const origEnd   = phase.endDate;
+    dragRef.current = {phaseId,type,startX,origStart,origEnd,containerWidth:rect.width,totalDays};
+
+    const onMove = ev => {
+      const {phaseId,type,startX,origStart,origEnd,containerWidth} = dragRef.current;
+      const daysDelta = Math.round(((ev.clientX-startX)/containerWidth)*totalDays);
+      if (type==="move") {
+        const dur = daysBetween(origStart,origEnd);
+        let ns = addDays(origStart,daysDelta);
+        if (addDays(ns,dur) > ganttEnd) ns = addDays(ganttEnd,-dur);
+        if (ns < ganttStart) ns = ganttStart;
+        onUpdate(phaseId, ns, addDays(ns,dur));
+      } else if (type==="resize-right") {
+        let ne = addDays(origEnd,daysDelta);
+        if (ne > ganttEnd) ne = ganttEnd;
+        if (ne > origStart) onUpdate(phaseId,origStart,ne);
+      } else if (type==="resize-left") {
+        let ns = addDays(origStart,daysDelta);
+        if (ns < ganttStart) ns = ganttStart;
+        if (ns < origEnd) onUpdate(phaseId,ns,origEnd);
+      }
+    };
+    const onUp = () => { dragRef.current=null; window.removeEventListener("mousemove",onMove); window.removeEventListener("mouseup",onUp); };
+    window.addEventListener("mousemove",onMove);
+    window.addEventListener("mouseup",onUp);
+  };
+
+  const rows = [];
+  PHASE_CATEGORIES.forEach(cat => {
+    const catPhases = phases.filter(p=>getPhase(p.phaseId)?.categoryId===cat.id);
+    if (catPhases.length===0) return;
+    rows.push({type:"category",cat});
+    catPhases.forEach(p=>rows.push({type:"phase",p,cat}));
+  });
+  if (rows.length===0) return null;
+
+  const ROW_H=36, LABEL_W=160;
+
+  return (
+    <div ref={containerRef} style={{overflowX:"auto",borderRadius:12,background:"#EAEDF0",border:"1px solid #E5E7EB"}}>
+      <div style={{minWidth:700}}>
+        {/* Month header */}
+        <div style={{display:"flex",borderBottom:"1px solid #E5E7EB"}}>
+          <div style={{width:LABEL_W,flexShrink:0,padding:"6px 12px"}} />
+          <div style={{flex:1,position:"relative",height:42}}>
+            {months.map((m,i)=>{
+              const left = Math.max(0,(daysBetween(ganttStart,m.toISOString().slice(0,10))/totalDays)*100);
+              const pctPerMonth = 100/totalDays*30;
+              if (pctPerMonth < 2 && m.getMonth()%3!==0) return null;
+              if (pctPerMonth < 1 && m.getMonth()%6!==0) return null;
+              return (
+                <div key={i} style={{position:"absolute",left:`${left}%`,top:4,paddingLeft:4,borderLeft:"1px solid #D1D5DB"}}>
+                  <div style={{fontSize:9,color:"#374151",fontWeight:700,lineHeight:1.4,whiteSpace:"nowrap"}}>{m.getFullYear()}</div>
+                  <div style={{fontSize:9,color:"#6B7280",fontWeight:600,lineHeight:1.4,whiteSpace:"nowrap"}}>{String(m.getMonth()+1).padStart(2,"0")}월</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* Rows */}
+        {rows.map((row,ri)=>{
+          if (row.type==="category") return (
+            <div key={`cat-${row.cat.id}`} style={{display:"flex",alignItems:"center",height:26,background:`${row.cat.color}18`,borderBottom:"1px solid #EEEFF2"}}>
+              <div style={{width:LABEL_W,flexShrink:0,padding:"0 12px",fontSize:10,fontWeight:800,color:row.cat.color,textTransform:"uppercase",letterSpacing:"0.1em"}}>{row.cat.label}</div>
+              <div style={{flex:1}} />
+            </div>
+          );
+          const {p,cat} = row;
+          const phase = getPhase(p.phaseId);
+          if (!p.startDate || !p.endDate) return (
+            <div key={p.id} style={{display:"flex",alignItems:"center",height:ROW_H,borderBottom:"1px solid #F3F4F6"}}>
+              <div style={{width:LABEL_W,flexShrink:0,padding:"0 12px 0 20px",fontSize:12,color:"#6B7280"}}>{phase?.label}</div>
+              <div style={{flex:1,padding:"0 8px"}}><span style={{fontSize:11,color:"#9CA3AF"}}>— 날짜 미설정</span></div>
+            </div>
+          );
+          const leftPct  = Math.max(0,(daysBetween(ganttStart,p.startDate)/totalDays)*100);
+          const widthPct = Math.max(0.5,(daysBetween(p.startDate,p.endDate)/totalDays)*100);
+          const dur = daysBetween(p.startDate,p.endDate);
+          return (
+            <div key={p.id} style={{display:"flex",alignItems:"center",height:ROW_H,borderBottom:"1px solid #F3F4F6",position:"relative"}}>
+              <div style={{width:LABEL_W,flexShrink:0,padding:"0 8px 0 20px",fontSize:12,color:"#374151",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{phase?.label}</div>
+              <div style={{flex:1,position:"relative",height:"100%"}}>
+                {months.map((m,i)=>{
+                  const l2 = Math.max(0,(daysBetween(ganttStart,m.toISOString().slice(0,10))/totalDays)*100);
+                  return <div key={i} style={{position:"absolute",left:`${l2}%`,top:0,bottom:0,width:1,background:"#E5E7EB"}} />;
+                })}
+                <div onMouseDown={e=>handleMouseDown(e,p.id,"move")} style={{position:"absolute",left:`${leftPct}%`,width:`${widthPct}%`,top:"50%",transform:"translateY(-50%)",height:22,borderRadius:6,background:`linear-gradient(90deg,${phase?.color||"#888"},${phase?.color||"#888"}bb)`,cursor:"grab",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"rgba(0,0,0,0.75)",fontWeight:700,userSelect:"none",minWidth:4,boxShadow:`0 2px 8px ${phase?.color||"#888"}44`,overflow:"hidden"}} title={`${p.startDate} ~ ${p.endDate} (${dur}일)`}>
+                  <div onMouseDown={e=>{e.stopPropagation();handleMouseDown(e,p.id,"resize-left");}} style={{position:"absolute",left:0,top:0,bottom:0,width:8,cursor:"ew-resize",background:"rgba(0,0,0,0.15)",borderRadius:"6px 0 0 6px"}} />
+                  {widthPct>6 && <span style={{pointerEvents:"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",padding:"0 12px"}}>{dur}d</span>}
+                  <div onMouseDown={e=>{e.stopPropagation();handleMouseDown(e,p.id,"resize-right");}} style={{position:"absolute",right:0,top:0,bottom:0,width:8,cursor:"ew-resize",background:"rgba(0,0,0,0.15)",borderRadius:"0 6px 6px 0"}} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── 스케줄 탭 ────────────────────────────────────────────────────────── */
+function ScheduleTab({schedule, onChange, project, standards, projectStart, ganttStart, setGanttStart, ganttEnd, setGanttEnd, onAutoCalc}) {
+
+  const updatePhase     = (id,f,v) => onChange("phases", schedule.phases.map(p=>p.id===id?{...p,[f]:v}:p));
+  const updatePhaseDates = (id, s, e) => {
+    const dur = Math.max(1, daysBetween(s, e));
+    const wvs = (standards && project) ? calcWorkVolumes(project, standards) : {};
+    const newPhases = schedule.phases.map(p => {
+      if (p.id !== id) return p;
+      const wv = wvs[p.phaseId];
+      if (wv && wv.work > 0) {
+        const raw = Math.max(1, Math.ceil(wv.work / dur));
+        const hc  = (wv.maxHC > 0) ? Math.min(raw, wv.maxHC) : raw;
+        return {...p, startDate: s, endDate: e, assignee: `${hc}명`};
+      }
+      return {...p, startDate: s, endDate: e};
+    });
+    onChange("phases", newPhases);
+  };
+  const removePhase     = id => onChange("phases", schedule.phases.filter(p=>p.id!==id));
+  const addPhase        = (catId,phaseId) => onChange("phases", [...schedule.phases, {id:Date.now(),phaseId,startDate:ganttStart,endDate:addDays(ganttStart,14),assignee:""}]);
+
+  const autoSetManagement = () => {
+    if (!project.deadline) { alert("프로젝트 정보에서 납품 기한을 먼저 설정하세요."); return; }
+    const projStart = project.startDate || ganttStart;
+    const mgmtIds = ["pd","director","supervisor","art_director","sub_director","coordinator"];
+    let phases = schedule.phases.map(p =>
+      mgmtIds.includes(p.phaseId) ? {...p, startDate:projStart, endDate:project.deadline} : p
+    );
+    mgmtIds.forEach(phaseId => {
+      if (!phases.find(p=>p.phaseId===phaseId))
+        phases.push({id:Date.now()+Math.random(), phaseId, startDate:projStart, endDate:project.deadline, assignee:""});
+    });
+    onChange("phases", phases);
+  };
+
+  const withDates = schedule.phases.filter(p=>p.startDate&&p.endDate);
+  const totalDays = withDates.length>0 ? daysBetween(
+    withDates.reduce((a,p)=>p.startDate<a?p.startDate:a, withDates[0].startDate),
+    withDates.reduce((a,p)=>p.endDate>a?p.endDate:a, withDates[0].endDate)
+  ) : null;
+
+  const dateInS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:6,padding:"4px 8px",color:"#1A1A2E",fontSize:12,outline:"none"};
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      {/* 2컬럼: 좌측 간트, 우측 카테고리 카드 */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 600px",gap:20,alignItems:"start"}}>
+
+        {/* 좌측: 간트 차트 */}
+        <Card style={{minWidth:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:12}}>
+            <h3 style={{margin:0,color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>
+              📊 Gantt Chart
+              {totalDays!==null && <span style={{marginLeft:10,fontSize:12,color:"#6B7280",fontWeight:400,textTransform:"none"}}>총 {totalDays}일</span>}
+            </h3>
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B7280"}}>시작 <input type="date" value={ganttStart} onChange={e=>setGanttStart(e.target.value)} style={dateInS} /></label>
+              <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B7280"}}>종료 <input type="date" value={ganttEnd} onChange={e=>setGanttEnd(e.target.value)} style={dateInS} /></label>
+              <button onClick={onAutoCalc} style={{background:"#C8102E",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>⚡ 자동 계산</button>
+            </div>
+          </div>
+          {schedule.phases.length===0
+            ? <div style={{textAlign:"center",color:"#6B7280",padding:"32px 0",fontSize:13}}>오른쪽에서 단계를 추가하면 차트가 표시됩니다</div>
+            : <GanttChart phases={schedule.phases} ganttStart={ganttStart} ganttEnd={ganttEnd} onUpdate={updatePhaseDates} />}
+        </Card>
+
+        {/* 우측: 카테고리 카드 패널 */}
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {PHASE_CATEGORIES.map(cat=>{
+            const catPhases = schedule.phases.filter(p=>getPhase(p.phaseId)?.categoryId===cat.id);
+            const addable   = cat.phases.filter(ph=>!schedule.phases.find(p=>p.phaseId===ph.id));
+            const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:6,padding:"5px 6px",color:"#1A1A2E",fontSize:11,outline:"none",width:"100%"};
+            return (
+              <Card key={cat.id} style={{borderColor:`${cat.color}33`,padding:"16px 18px"}}>
+                {/* 카테고리 헤더 */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{width:3,height:16,borderRadius:2,background:cat.color}} />
+                    <span style={{fontSize:13,fontWeight:800,color:cat.color,letterSpacing:"0.04em"}}>{cat.label}</span>
+                    {cat.id==="management" && (
+                      <button onClick={autoSetManagement}
+                        title={project.deadline?"납품 기한("+project.deadline+")으로 자동 설정":"먼저 납품 기한을 설정하세요"}
+                        style={{background:project.deadline?"#FF6B3518":"#F3F4F6",border:`1px solid ${project.deadline?"#FF6B3544":"#E5E7EB"}`,borderRadius:6,padding:"3px 9px",color:project.deadline?"#FF6B35":"#9CA3AF",fontSize:10,fontWeight:700,cursor:project.deadline?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
+                        📅 납품기한 자동 설정
+                      </button>
+                    )}
+                  </div>
+                  {addable.length>0 && (
+                    <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                      {addable.map(ph=>(
+                        <button key={ph.id} onClick={()=>addPhase(cat.id,ph.id)} style={{background:`${ph.color}22`,border:`1px solid ${ph.color}55`,borderRadius:5,padding:"3px 8px",color:ph.color,fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>+ {ph.label}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {catPhases.length===0
+                  ? <div style={{color:"#9CA3AF",fontSize:11,padding:"4px 0"}}>위 버튼으로 단계를 추가하세요</div>
+                  : (
+                    <>
+                      {/* 헤더 행 */}
+                      <div style={{display:"grid",gridTemplateColumns:"130px 1fr 1fr 100px 26px",gap:4,padding:"0 2px",marginBottom:4}}>
+                        {["단계","시작일","종료일","담당자",""].map((h,i)=>(
+                          <span key={i} style={{fontSize:9,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</span>
+                        ))}
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {catPhases.map(p=>{
+                          const ph  = getPhase(p.phaseId);
+                          const dur = p.startDate&&p.endDate ? daysBetween(p.startDate,p.endDate) : null;
+                          return (
+                            <div key={p.id} style={{display:"grid",gridTemplateColumns:"130px 1fr 1fr 100px 26px",gap:4,alignItems:"center",padding:"6px 8px",borderRadius:8,background:`${ph?.color||"#888"}0d`,border:`1px solid ${ph?.color||"#888"}22`}}>
+                              <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}>
+                                <div style={{width:7,height:7,borderRadius:2,background:ph?.color,flexShrink:0}} />
+                                <span style={{fontSize:11,color:"#1A1A2E",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph?.label}</span>
+                              </div>
+                              <input type="date" value={p.startDate} onChange={e=>updatePhase(p.id,"startDate",e.target.value)} style={inS} />
+                              <div style={{display:"flex",alignItems:"center",gap:3}}>
+                                <input type="date" value={p.endDate} onChange={e=>updatePhase(p.id,"endDate",e.target.value)} style={{...inS,flex:1}} />
+                                {dur!==null && <span style={{fontSize:9,color:"#9CA3AF",whiteSpace:"nowrap"}}>{dur}일</span>}
+                              </div>
+                              <input value={p.assignee} onChange={e=>updatePhase(p.id,"assignee",e.target.value)} placeholder="담당자" style={inS} />
+                              <button onClick={()=>removePhase(p.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:5,padding:"3px 5px",color:"#EF4444",cursor:"pointer",fontSize:10,lineHeight:1}}>✕</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 하단: 메모 */}
+      <Card>
+        <h3 style={{margin:"0 0 12px",color:"#C8102E",fontSize:13,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>📝 일정 메모</h3>
+        <textarea value={schedule.note} onChange={e=>onChange("note",e.target.value)} rows={3} placeholder="특이사항, 리뷰 일정, 클라이언트 피드백 일정 등"
+          style={{width:"100%",background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:10,padding:"10px 14px",color:"#1A1A2E",fontSize:14,outline:"none",resize:"vertical",boxSizing:"border-box"}} />
+      </Card>
+    </div>
+  );
+}
+
+/* ── 견적 탭 ──────────────────────────────────────────────────────────── */
+function QuoteTab({quote, onChange, userCanEditRate}) {
+  const addItem = roleId => {
+    const role = getRole(roleId);
+    if (!role) return;
+    onChange("items", [...quote.items, {
+      id:Date.now(), roleId:role.id, label:role.label,
+      headcount:1, days:1, utilization:100, rate:role.defaultRate,
+      unit:role.unit, categoryId:role.categoryId
+    }]);
+  };
+  const updateItem = (id,field,value) => {
+    onChange("items", quote.items.map(item=>{
+      if (item.id!==id) return item;
+      if (field==="roleId") {
+        const r=getRole(value);
+        return {...item,roleId:value,label:r?.label||item.label,unit:r?.unit||item.unit,rate:r?.defaultRate??item.rate,categoryId:r?.categoryId||item.categoryId};
+      }
+      return {...item,[field]:value};
+    }));
+  };
+  const removeItem = id => onChange("items", quote.items.filter(i=>i.id!==id));
+
+  // lineTotal = headcount × days × (utilization/100) × rate
+  const calcLine = item => {
+    const role = getRole(item.roleId);
+    if (role?.isContingency) return 0;
+    if (item.unit!=="일") return Number(item.headcount||1)*Number(item.days||1)*Number(item.rate||0);
+    return Number(item.headcount||1)*Number(item.days||1)*(Number(item.utilization??100)/100)*Number(item.rate||0);
+  };
+
+  const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+calcLine(i),0);
+  const sub = quote.items.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
+  const disc = sub*(Number(quote.discountPct)/100);
+  const afterDisc = sub-disc;
+  const vat = afterDisc*(quote.includeVat?0.1:0);
+  const total = afterDisc+vat;
+  const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:7,padding:"5px 6px",color:"#1A1A2E",fontSize:11,outline:"none",textAlign:"center",width:"100%"};
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {ROLE_CATEGORIES.map(cat=>{
+        const catItems = quote.items.filter(i=>i.categoryId===cat.id);
+        const catSub   = catItems.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
+        const addable  = cat.roles.filter(r=>!quote.items.find(i=>i.roleId===r.id));
+        return (
+          <Card key={cat.id} style={{borderColor:`${cat.color}33`,padding:"18px 22px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:4,height:16,borderRadius:2,background:cat.color}} />
+                <span style={{fontSize:13,fontWeight:800,color:cat.color,letterSpacing:"0.05em"}}>{cat.label}</span>
+                {catSub>0 && <span style={{fontSize:11,color:"#6B7280"}}>₩{formatNum(Math.round(catSub))}</span>}
+              </div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                {addable.map(r=>(
+                  <button key={r.id} onClick={()=>addItem(r.id)} style={{background:`${cat.color}18`,border:`1px solid ${cat.color}44`,borderRadius:6,padding:"3px 9px",color:cat.color,fontSize:10,fontWeight:700,cursor:"pointer"}}>+ {r.label}</button>
+                ))}
+              </div>
+            </div>
+
+            {catItems.length===0
+              ? <div style={{fontSize:12,color:"#6B7280",padding:"4px 0"}}>위 버튼으로 항목을 추가하세요</div>
+              : (
+                <>
+                  {/* 헤더 */}
+                  <div style={{display:"grid",gridTemplateColumns:"1.8fr 55px 55px 55px 90px 80px 28px",gap:5,marginBottom:5,padding:"0 2px"}}>
+                    {["항목","인원","투입률(%)","일수","단가(₩/일)","소계",""].map((h,i)=>(
+                      <span key={i} style={{fontSize:9,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",textAlign:i>0&&i<6?"center":"left"}}>{h}</span>
+                    ))}
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    {catItems.map(item=>{
+                      const role = getRole(item.roleId);
+                      const isC  = role?.isContingency;
+                      const lineTotal = isC ? prodSub*0.05 : calcLine(item);
+                      const linked = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===item.roleId)?.[0];
+                      return (
+                        <div key={item.id} style={{display:"grid",gridTemplateColumns:"1.8fr 55px 55px 55px 90px 80px 28px",gap:5,alignItems:"center",padding:"7px 8px",borderRadius:8,background:`${cat.color}0a`,border:`1px solid ${cat.color}18`}}>
+                          {/* 항목명 */}
+                          <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
+                            <div style={{width:5,height:5,borderRadius:1,background:cat.color,flexShrink:0}} />
+                            <input value={item.label} onChange={e=>updateItem(item.id,"label",e.target.value)}
+                              style={{...inS,textAlign:"left",flex:1,minWidth:0}} />
+                            {linked && <span title="스케줄 연동" style={{fontSize:8,color:"#059669",border:"1px solid #05966944",borderRadius:3,padding:"1px 4px",whiteSpace:"nowrap",flexShrink:0}}>⟳</span>}
+                          </div>
+                          {isC ? (
+                            <><div style={{fontSize:10,color:"#9CA3AF",textAlign:"center",gridColumn:"span 3"}}>— 자동 5% —</div></>
+                          ) : (
+                            <>
+                              {/* 인원 */}
+                              <input type="number" min="1" value={item.headcount??1} onChange={e=>updateItem(item.id,"headcount",e.target.value)} style={inS} />
+                              {/* 투입률 */}
+                              <input type="number" min="1" max="100" value={item.utilization??100} onChange={e=>updateItem(item.id,"utilization",e.target.value)} style={inS} />
+                              {/* 일수 */}
+                              <input type="number" min="1" value={item.days??item.qty??1} onChange={e=>updateItem(item.id,"days",e.target.value)} style={inS} />
+                              {/* 단가 */}
+                              <input type="number" value={item.rate} onChange={e=>updateItem(item.id,"rate",e.target.value)}
+                                disabled={!userCanEditRate}
+                                style={{...inS,textAlign:"right",opacity:userCanEditRate?1:0.5,cursor:userCanEditRate?"text":"not-allowed"}} />
+                            </>
+                          )}
+                          {/* 소계 */}
+                          <div style={{fontSize:11,fontWeight:700,color:"#1A1A2E",textAlign:"right"}}>₩{formatNum(Math.round(lineTotal))}</div>
+                          <button onClick={()=>removeItem(item.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:6,padding:"4px 7px",color:"#EF4444",cursor:"pointer",fontSize:11}}>✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* 공식 안내 */}
+                  <div style={{marginTop:8,fontSize:10,color:"#9CA3AF",textAlign:"right"}}>
+                    소계 = 인원 × 투입률(%) ÷ 100 × 일수 × 단가
+                  </div>
+                  {/* 카테고리 소계 */}
+                  <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${cat.color}33`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.05em"}}>{cat.label} 소계</span>
+                    <span style={{fontSize:17,fontWeight:900,color:cat.color}}>₩{formatNum(Math.round(catSub))}</span>
+                  </div>
+                </>
+              )}
+          </Card>
+        );
+      })}
+
+      <Card>
+        <h3 style={{margin:"0 0 16px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>🧮 견적 합계</h3>
+        {quote.items.length>0 && sub>0 && (
+          <div style={{marginBottom:20}}>
+            <div style={{display:"flex",height:8,borderRadius:99,overflow:"hidden",gap:1,marginBottom:10}}>
+              {ROLE_CATEGORIES.map(cat=>{
+                const amt = quote.items.filter(i=>i.categoryId===cat.id).reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
+                const pct = (amt/sub)*100;
+                if (pct===0) return null;
+                return <div key={cat.id} style={{width:`${pct}%`,background:cat.color,minWidth:2}} title={`${cat.label}: ${pct.toFixed(1)}%`} />;
+              })}
+            </div>
+            <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+              {ROLE_CATEGORIES.map(cat=>{
+                const amt = quote.items.filter(i=>i.categoryId===cat.id).reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
+                if (amt===0) return null;
+                return (
+                  <div key={cat.id} style={{display:"flex",alignItems:"center",gap:5}}>
+                    <div style={{width:8,height:8,borderRadius:2,background:cat.color}} />
+                    <span style={{fontSize:11,color:"#6B7280"}}>{cat.label}</span>
+                    <span style={{fontSize:11,color:"#1A1A2E",fontWeight:600}}>₩{formatNum(Math.round(amt))}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:18}}>
+          <FInput label="할인율 (%)" type="number" value={quote.discountPct} onChange={e=>onChange("discountPct",e.target.value)} placeholder="0" />
+          <label style={{display:"flex",alignItems:"center",gap:10,paddingTop:24}}>
+            <input type="checkbox" checked={quote.includeVat} onChange={e=>onChange("includeVat",e.target.checked)} style={{width:18,height:18,accentColor:"#C8102E",cursor:"pointer"}} />
+            <span style={{color:"#1A1A2E",fontSize:14}}>부가세 (10%) 포함</span>
+          </label>
+        </div>
+        <div style={{borderTop:"1px solid #E5E7EB",paddingTop:16}}>
+          {[
+            {label:"소계",value:sub,dimmed:false},
+            Number(quote.discountPct)>0&&{label:`할인 (${quote.discountPct}%)`,value:-disc,dimmed:true},
+            quote.includeVat&&{label:"부가세 (10%)",value:vat,dimmed:true}
+          ].filter(Boolean).map((row,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:10,color:row.dimmed?"#9CA3AF":"#1A1A2E"}}>
+              <span style={{fontSize:14}}>{row.label}</span>
+              <span style={{fontSize:14,fontWeight:600}}>{row.value<0?"-":""}₩{formatNum(Math.abs(Math.round(row.value)))}</span>
+            </div>
+          ))}
+          <div style={{display:"flex",justifyContent:"space-between",paddingTop:12,borderTop:"1px solid #D1D5DB",marginTop:4}}>
+            <span style={{fontSize:18,fontWeight:800,color:"#C8102E"}}>총 견적금액</span>
+            <span style={{fontSize:22,fontWeight:900,color:"#C8102E"}}>₩{formatNum(Math.round(total))}</span>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ── 기준표 탭 ────────────────────────────────────────────────────────── */
+function StandardsTab({allStandards, onChange}) {
+  const [activeStd, setActiveStd] = React.useState("cinematic");
+  const standards = allStandards[activeStd] || allStandards.cinematic;
+  const updateStd = newStd => onChange({...allStandards, [activeStd]: newStd});
+
+  const updatePP   = (id,field,val) => updateStd({...standards, preproduction: (standards.preproduction||[]).map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
+  const updateAsset= (id,field,val) => updateStd({...standards, asset: standards.asset.map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
+  const updateProd = (id,field,val) => updateStd({...standards, production: standards.production.map(s=>s.id===id?{...s,[field]:Number(val)}:s)});
+
+  const resetStd = () => {
+    if (!window.confirm("현재 기준표를 기본값으로 초기화하시겠습니까?")) return;
+    const def = activeStd==="animation" ? DEFAULT_STANDARDS_ANIMATION : DEFAULT_STANDARDS_CINEMATIC;
+    onChange({...allStandards, [activeStd]: def});
+  };
+
+  const assetCats = ["모델링","룩댑","리깅"];
+  const prodCats  = ["애니메이션","라이팅&렌더","FX","합성","시뮬레이션","언리얼","모션그래픽"];
+  const qColor    = {S:"#C8102E",A:"#F59E0B",B:"#34D399"};
+  const inS = {background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:6,padding:"4px 6px",color:"#1A1A2E",fontSize:12,outline:"none",textAlign:"right",width:65};
+  const inSS= {...inS,width:48};
+  const th  = {padding:"6px 8px",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"2px solid #E5E7EB",background:"#F4F5F7",whiteSpace:"nowrap"};
+  const td0 = {padding:"5px 8px",borderBottom:"1px solid #F3F4F6",fontSize:11};
+
+  const StdTable = ({cols, rows, renderRow}) => (
+    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+      <thead><tr>{cols.map((h,i)=><th key={i} style={{...th,textAlign:i>0?"center":"left"}}>{h}</th>)}</tr></thead>
+      <tbody>{rows.map((s,ri)=><tr key={s.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>{renderRow(s)}</tr>)}</tbody>
+    </table>
+  );
+
+  const QBadge = ({q}) => <span style={{background:qColor[q]+"22",color:qColor[q],fontWeight:700,padding:"1px 6px",borderRadius:4,fontSize:11}}>{q}</span>;
+
+  const ppRows = standards.preproduction || [];
+  const ppDesign = ppRows.filter(s=>s.cat==="디자인");
+  const ppSB     = ppRows.filter(s=>s.cat==="스토리보드/릴");
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      {/* 탭 선택 */}
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        {[{key:"cinematic",label:"📋 견적기준표 for Game Cinematic"},{key:"animation",label:"📋 견적기준표 for 3D 애니메이션"}].map(t=>(
+          <button key={t.key} onClick={()=>setActiveStd(t.key)}
+            style={{padding:"9px 18px",borderRadius:9,border:`2px solid ${activeStd===t.key?"#C8102E":"#E5E7EB"}`,cursor:"pointer",fontSize:12,fontWeight:700,
+              background:activeStd===t.key?"#C8102E":"#fff",color:activeStd===t.key?"#fff":"#374151",transition:"all 0.2s"}}>
+            {t.label}
+          </button>
+        ))}
+        <button onClick={resetStd} style={{marginLeft:"auto",padding:"7px 14px",borderRadius:8,border:"1px solid #E5E7EB",background:"#F8F9FA",color:"#9CA3AF",fontSize:11,cursor:"pointer",fontWeight:600}}>
+          기본값 초기화
+        </button>
+        <span style={{fontSize:11,color:"#34D399",fontWeight:600}}>✓ 자동 저장</span>
+      </div>
+
+      {/* PreProduction */}
+      {ppRows.length > 0 && (
+        <Card>
+          <h3 style={{margin:"0 0 4px",color:"#A78BFA",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>🎨 Pre Production 기준</h3>
+          <p style={{fontSize:11,color:"#9CA3AF",marginBottom:14}}>디자인·스토리보드 — 에셋 1종(또는 분) 당 작업 기간(일)</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            {/* 디자인 */}
+            <div>
+              <div style={{fontSize:12,fontWeight:800,color:"#374151",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E5E7EB"}}>디자인</div>
+              <StdTable
+                cols={["분량","등급","인원","기간(일)"]}
+                rows={ppDesign}
+                renderRow={s=>[
+                  <td key="item" style={{...td0,color:"#374151"}}>{s.item}</td>,
+                  <td key="q" style={{...td0,textAlign:"center"}}><QBadge q={s.q} /></td>,
+                  <td key="hc" style={{...td0,textAlign:"right"}}><input type="number" min="1" value={s.hc??1} onChange={e=>updatePP(s.id,"hc",e.target.value)} style={inSS}/></td>,
+                  <td key="days" style={{...td0,textAlign:"right"}}><input type="number" min="0.1" step="0.25" value={s.days} onChange={e=>updatePP(s.id,"days",e.target.value)} style={inS}/></td>,
+                ]}
+              />
+            </div>
+            {/* 스토리보드/릴 */}
+            <div>
+              <div style={{fontSize:12,fontWeight:800,color:"#374151",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E5E7EB"}}>스토리보드/릴</div>
+              <StdTable
+                cols={["분량","등급","인원","기간(일)"]}
+                rows={ppSB}
+                renderRow={s=>[
+                  <td key="item" style={{...td0,color:"#374151"}}>{s.item}</td>,
+                  <td key="q" style={{...td0,textAlign:"center"}}><QBadge q={s.q} /></td>,
+                  <td key="hc" style={{...td0,textAlign:"right"}}><input type="number" min="1" value={s.hc??1} onChange={e=>updatePP(s.id,"hc",e.target.value)} style={inSS}/></td>,
+                  <td key="days" style={{...td0,textAlign:"right"}}><input type="number" min="0.1" step="0.25" value={s.days} onChange={e=>updatePP(s.id,"days",e.target.value)} style={inS}/></td>,
+                ]}
+              />
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* 에셋 기준 */}
+      <Card>
+        <h3 style={{margin:"0 0 4px",color:"#34D399",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>🏗 에셋 제작 기준</h3>
+        <p style={{fontSize:11,color:"#9CA3AF",marginBottom:14}}>모델링·룩댑·리깅 — 에셋 1종당 작업 기간(일, 인원 1명 기준)</p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
+          {assetCats.map(cat=>{
+            const rows = standards.asset.filter(s=>s.cat===cat);
+            return (
+              <div key={cat}>
+                <div style={{fontSize:12,fontWeight:800,color:"#374151",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E5E7EB"}}>{cat}</div>
+                <StdTable
+                  cols={["분량","등급",cat==="룩댑"?"해상도":"","인원","기간(일)"].filter(Boolean)}
+                  rows={rows}
+                  renderRow={s=>[
+                    <td key="item" style={{...td0,color:"#374151"}}>{s.item}</td>,
+                    <td key="q" style={{...td0,textAlign:"center"}}><QBadge q={s.q}/></td>,
+                    cat==="룩댑" && <td key="res" style={{...td0,textAlign:"center",color:"#6B7280"}}>{s.res}</td>,
+                    <td key="hc" style={{...td0,textAlign:"right"}}><input type="number" min="1" value={s.hc??1} onChange={e=>updateAsset(s.id,"hc",e.target.value)} style={inSS}/></td>,
+                    <td key="days" style={{...td0,textAlign:"right"}}><input type="number" min="0.1" step="0.25" value={s.days} onChange={e=>updateAsset(s.id,"days",e.target.value)} style={inS}/></td>,
+                  ].filter(Boolean)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* 프레임 기준 */}
+      <Card>
+        <h3 style={{margin:"0 0 4px",color:"#F59E0B",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>🎬 샷 작업 기준</h3>
+        <p style={{fontSize:11,color:"#9CA3AF",marginBottom:14}}>애니메이션·LR·FX·합성·시뮬레이션 — 1인이 1주에 처리 가능한 초(秒)</p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
+          {prodCats.map(cat=>{
+            const rows = standards.production.filter(s=>s.cat===cat);
+            const hasRes = rows.some(s=>s.res);
+            return (
+              <div key={cat}>
+                <div style={{fontSize:12,fontWeight:800,color:"#374151",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E5E7EB"}}>{cat}</div>
+                <StdTable
+                  cols={["등급",hasRes?"해상도":"","FPS","인원","초/주"].filter(Boolean)}
+                  rows={rows}
+                  renderRow={s=>[
+                    <td key="q" style={{...td0,textAlign:"center"}}><QBadge q={s.q}/></td>,
+                    hasRes && <td key="res" style={{...td0,textAlign:"center",color:"#6B7280"}}>{s.res||"-"}</td>,
+                    <td key="fps" style={{...td0,textAlign:"center",color:"#6B7280"}}>{s.fps}</td>,
+                    <td key="hc" style={{...td0,textAlign:"right"}}><input type="number" min="1" value={s.hc??1} onChange={e=>updateProd(s.id,"hc",e.target.value)} style={inSS}/></td>,
+                    <td key="spw" style={{...td0,textAlign:"right"}}><input type="number" min="0.1" step="0.01" value={s.spw} onChange={e=>updateProd(s.id,"spw",e.target.value)} style={inS}/></td>,
+                  ].filter(Boolean)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ── 요약 탭 ──────────────────────────────────────────────────────────── */
+function SummaryTab({project, schedule, quote}) {
+  const calcLine = item => {
+    const role = getRole(item.roleId);
+    if (role?.isContingency) return 0;
+    if (item.unit!=="일") return Number(item.headcount||1)*Number(item.days||item.qty||1)*Number(item.rate||0);
+    return Number(item.headcount||1)*Number(item.days||item.qty||1)*(Number(item.utilization??100)/100)*Number(item.rate||0);
+  };
+  const prodSub = quote.items.filter(i=>!getRole(i.roleId)?.isContingency).reduce((acc,i)=>acc+calcLine(i),0);
+  const sub = quote.items.reduce((acc,i)=>{ const r=getRole(i.roleId); return acc+(r?.isContingency?prodSub*0.05:calcLine(i)); },0);
+  const disc = sub*(Number(quote.discountPct)/100);
+  const afterDisc = sub-disc;
+  const vat = afterDisc*(quote.includeVat?0.1:0);
+  const grandTotal = afterDisc+vat;
+
+  const firstPhase = schedule.phases.filter(p=>p.startDate).sort((a,b)=>new Date(a.startDate)-new Date(b.startDate))[0];
+  const lastPhase  = schedule.phases.filter(p=>p.endDate).sort((a,b)=>new Date(b.endDate)-new Date(a.endDate))[0];
+  const totalDays  = firstPhase&&lastPhase ? daysBetween(firstPhase.startDate, lastPhase.endDate) : null;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
+        {[
+          {label:"총 견적금액",value:`₩${formatNum(Math.round(grandTotal))}`,sub:"부가세 포함",color:"#C8102E"},
+          {label:"총 제작 기간",value:totalDays?`${totalDays}일`:"-",sub:firstPhase?`${firstPhase.startDate} ~ ${lastPhase?.endDate}`:"일정 미입력",color:"#6B9ECC"},
+          {label:"납품 기한",value:project.deadline||"-",sub:project.videoType||"유형 미설정",color:"#34D399"}
+        ].map((kpi,i)=>(
+          <div key={i} style={{background:`${kpi.color}11`,border:`1px solid ${kpi.color}33`,borderRadius:16,padding:"20px 22px"}}>
+            <div style={{fontSize:12,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>{kpi.label}</div>
+            <div style={{fontSize:24,fontWeight:900,color:kpi.color,marginBottom:4}}>{kpi.value}</div>
+            <div style={{fontSize:12,color:"#6B7280"}}>{kpi.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <Card>
+        <h3 style={{margin:"0 0 16px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>📋 프로젝트 개요</h3>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {[["프로젝트명",project.name||"-"],["클라이언트",project.client||"-"],["담당 PD",project.manager||"-"],["영상 유형",project.videoType||"-"],["영상 길이",project.duration?`${project.duration}초`:"-"],["FPS",project.fps?`${project.fps} fps`:"-"],["해상도",project.resolution||"-"],["수정 횟수",project.revisions?`${project.revisions}회`:"-"],["납품 포맷",project.format||"-"]].map(([k,v],i)=>(
+            <div key={i} style={{display:"flex",gap:10}}>
+              <span style={{fontSize:13,color:"#6B7280",minWidth:80}}>{k}</span>
+              <span style={{fontSize:13,color:"#1A1A2E",fontWeight:600}}>{v}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {schedule.phases.length>0 && (
+        <Card>
+          <h3 style={{margin:"0 0 16px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>📅 일정 요약</h3>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{background:"#F4F5F7"}}>
+                  {["단계","시작일","종료일","기간","담당자"].map((h,i)=>(
+                    <th key={i} style={{padding:"8px 12px",textAlign:i===0?"left":"center",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"2px solid #E5E7EB",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {schedule.phases.map((p,ri)=>{
+                  const phase = getPhase(p.phaseId);
+                  const days  = p.startDate&&p.endDate ? daysBetween(p.startDate,p.endDate) : null;
+                  return (
+                    <tr key={p.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6"}}>
+                        <Tag color={phase?.color||"#888"}>{phase?.label}</Tag>
+                      </td>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center",color:"#374151"}}>{p.startDate||"-"}</td>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center",color:"#374151"}}>{p.endDate||"-"}</td>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center",color:"#6B7280",fontWeight:600}}>{days!==null?`${days}일`:"-"}</td>
+                      <td style={{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center",color:"#6B9ECC"}}>{p.assignee||"-"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {quote.items.length>0 && (
+        <Card>
+          <h3 style={{margin:"0 0 16px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>💰 견적 요약</h3>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{background:"#F4F5F7"}}>
+                  {["항목","인원 × 투입률 × 일수","단가","금액"].map((h,i)=>(
+                    <th key={i} style={{padding:"8px 12px",textAlign:i===0?"left":"right",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"2px solid #E5E7EB",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ROLE_CATEGORIES.map(cat=>{
+                  const catItems = quote.items.filter(i=>i.categoryId===cat.id);
+                  if (catItems.length===0) return null;
+                  return [
+                    <tr key={`cat-${cat.id}`}>
+                      <td colSpan={4} style={{padding:"10px 12px 4px",fontSize:11,fontWeight:700,color:cat.color,textTransform:"uppercase",letterSpacing:"0.08em",borderBottom:`1px solid ${cat.color}33`}}>{cat.label}</td>
+                    </tr>,
+                    ...catItems.map((item,ri)=>{
+                      const r   = getRole(item.roleId);
+                      const amt = r?.isContingency ? prodSub*0.05 : calcLine(item);
+                      const detail = r?.isContingency ? "5% 자동"
+                        : (item.unit==="일" ? `${item.headcount||1}명 × ${item.utilization??100}% × ${item.days||item.qty||1}일` : `${item.headcount||1}명 × ${item.days||item.qty||1}${item.unit}`);
+                      return (
+                        <tr key={item.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>
+                          <td style={{padding:"8px 12px",borderBottom:"1px solid #F3F4F6",color:"#1A1A2E",fontWeight:600}}>{item.label}</td>
+                          <td style={{padding:"8px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"right",color:"#6B7280",fontSize:12,whiteSpace:"nowrap"}}>{detail}</td>
+                          <td style={{padding:"8px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"right",color:"#6B7280",whiteSpace:"nowrap"}}>{r?.isContingency?"-":`₩${formatNum(item.rate)}`}</td>
+                          <td style={{padding:"8px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"right",color:"#1A1A2E",fontWeight:700,whiteSpace:"nowrap"}}>₩{formatNum(Math.round(amt))}</td>
+                        </tr>
+                      );
+                    })
+                  ];
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{borderTop:"2px solid #C8102E"}}>
+                  <td colSpan={3} style={{padding:"12px",fontSize:16,fontWeight:800,color:"#C8102E"}}>총 견적금액</td>
+                  <td style={{padding:"12px",textAlign:"right",fontSize:20,fontWeight:900,color:"#C8102E",whiteSpace:"nowrap"}}>₩{formatNum(Math.round(grandTotal))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+
+/* ── 내부인원 탭 ─────────────────────────────────────────────────────── */
+function InternalStaffTab({internalStaff, onChange}) {
+  const STAFF_GROUPS = [
+    { label:"Management", color:"#FF6B35", roles:[
+      {id:"director",    label:"Director"},
+      {id:"pd",          label:"PD"},
+      {id:"coordinator", label:"코디네이터"},
+      {id:"art_director",label:"Art Director"},
+      {id:"sub_director",label:"조감독"},
+    ]},
+    { label:"PreProduction", color:"#A78BFA", roles:[
+      {id:"designer",          label:"디자인"},
+      {id:"storyboard_artist", label:"스토리보드/릴"},
+    ]},
+    { label:"MainProduction", color:"#34D399", roles:[
+      {id:"modeler",               label:"모델링"},
+      {id:"texture_shading",       label:"룩댑(텍스처/쉐이딩)"},
+      {id:"rigger",                label:"리깅"},
+      {id:"animator",              label:"애니메이터"},
+      {id:"lighting_render",       label:"라이팅&렌더"},
+      {id:"fx_artist",             label:"FX"},
+      {id:"motion_graphic_artist", label:"모션그래픽"},
+      {id:"unreal_artist",         label:"언리얼"},
+      {id:"compositor",            label:"합성"},
+    ]},
+  ];
+  const update = (id, val) => onChange({...internalStaff, [id]: Math.max(0, Number(val)||0)});
+  const th = {padding:"9px 14px",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"2px solid #E5E7EB",background:"#F4F5F7"};
+  return (
+    <div className="no-print" style={{display:"flex",flexDirection:"column",gap:20}}>
+      <Card>
+        <h3 style={{margin:"0 0 6px",color:"#C8102E",fontSize:14,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>👥 내부 인원 현황</h3>
+        <p style={{fontSize:12,color:"#6B7280",marginBottom:20}}>파트별 내부 인원 수를 설정합니다. 자동 계산 시 이 인원수를 기준으로 배치됩니다. (PDF 미출력)</p>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",maxWidth:500,borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr>
+                <th style={{...th,textAlign:"left",width:140}}>항목</th>
+                <th style={{...th,textAlign:"left"}}>Team</th>
+                <th style={{...th,textAlign:"center",width:100}}>(단위: 명)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {STAFF_GROUPS.flatMap((group,gi) => [
+                <tr key={`g-${gi}`} style={{background:`${group.color}18`}}>
+                  <td colSpan={3} style={{padding:"7px 14px",fontSize:11,fontWeight:800,color:group.color,textTransform:"uppercase",letterSpacing:"0.08em"}}>{group.label}</td>
+                </tr>,
+                ...group.roles.map((role,ri) => (
+                  <tr key={role.id} style={{background:ri%2===0?"#fff":"#FAFAFA"}}>
+                    <td style={{padding:"6px 14px",borderBottom:"1px solid #F3F4F6"}} />
+                    <td style={{padding:"6px 14px",color:"#374151",fontWeight:600,borderBottom:"1px solid #F3F4F6"}}>{role.label}</td>
+                    <td style={{padding:"4px 14px",borderBottom:"1px solid #F3F4F6",textAlign:"center"}}>
+                      <input type="number" min="0" value={internalStaff[role.id]??1}
+                        onChange={e=>update(role.id, e.target.value)}
+                        style={{width:64,textAlign:"center",background:"#F8F9FA",border:"1px solid #E5E7EB",borderRadius:7,padding:"5px 8px",fontSize:14,fontWeight:700,outline:"none"}} />
+                    </td>
+                  </tr>
+                ))
+              ])}
+            </tbody>
+          </table>
+        </div>
+        <div style={{marginTop:14,fontSize:11,color:"#9CA3AF"}}>※ 설정한 인원 수는 자동 저장됩니다. ⚡ 자동 계산 버튼을 누를 때 반영됩니다.</div>
+      </Card>
+    </div>
+  );
+}
+
+/* ── 메인 앱 (로그인 없음) ───────────────────────────────────────────── */
+const DEFAULT_PROJECT = {name:"",client:"",manager:"",startDate:"",deadline:"",videoType:"",description:"",duration:"",resolution:"1920x1080",format:"mp4_h264",revisions:"3",music:"",subtitle:"",fps:"24",qualityGrade:"A",charS:"0",charA:"1",charB:"0",propS:"0",propA:"0",propB:"0",bgS:"0",bgA:"1",bgB:"0",isUnreal:false};
+const DEFAULT_SCHEDULE = {phases:[],note:""};
+const DEFAULT_QUOTE    = {items:[],discountPct:0,includeVat:true};
+
+/* ── 기준표 기본값 ──────────────────────────────────────────────────────── */
+const _mkAsset = (pfx,cat,item,q,res,days) => ({id:`${pfx}_${q.toLowerCase()}${res?"_"+res.toLowerCase():""}`,cat,item,q,res,days,hc:1});
+const _mkProd  = (pfx,cat,q,res,fps,spw) => ({id:`${pfx}_${q.toLowerCase()}${res?"_"+res.toLowerCase():""}${fps?`_${fps}`:""}`,cat,q,res,fps,spw,hc:1});
+const _mkPP    = (id,cat,item,q,days) => ({id,cat,item,q,res:"",days,hc:1});
+
+/* ── Game Cinematic ── */
+const DEFAULT_STANDARDS_CINEMATIC = {
+  preproduction:[
+    _mkPP("pp_d_c_s","디자인","캐릭터 1종","S",20), _mkPP("pp_d_c_a","디자인","캐릭터 1종","A",15), _mkPP("pp_d_c_b","디자인","캐릭터 1종","B",10),
+    _mkPP("pp_d_p_s","디자인","프랍 1종",  "S",10), _mkPP("pp_d_p_a","디자인","프랍 1종",  "A",5),  _mkPP("pp_d_p_b","디자인","프랍 1종",  "B",2),
+    _mkPP("pp_d_b_s","디자인","배경 1종",  "S",40), _mkPP("pp_d_b_a","디자인","배경 1종",  "A",30), _mkPP("pp_d_b_b","디자인","배경 1종",  "B",20),
+    _mkPP("pp_sb_s", "스토리보드/릴","1분","S",7),
+  ],
+  asset:[
+    {id:"m_c_s",cat:"모델링",item:"캐릭터 1종",q:"S",res:"",days:20,hc:1},
+    {id:"m_c_a",cat:"모델링",item:"캐릭터 1종",q:"A",res:"",days:15,hc:1},
+    {id:"m_c_b",cat:"모델링",item:"캐릭터 1종",q:"B",res:"",days:10,hc:1},
+    {id:"m_p_s",cat:"모델링",item:"프랍 1종",  q:"S",res:"",days:10,hc:1},
+    {id:"m_p_a",cat:"모델링",item:"프랍 1종",  q:"A",res:"",days:5, hc:1},
+    {id:"m_p_b",cat:"모델링",item:"프랍 1종",  q:"B",res:"",days:2, hc:1},
+    {id:"m_b_s",cat:"모델링",item:"배경 1종",  q:"S",res:"",days:40,hc:1},
+    {id:"m_b_a",cat:"모델링",item:"배경 1종",  q:"A",res:"",days:30,hc:1},
+    {id:"m_b_b",cat:"모델링",item:"배경 1종",  q:"B",res:"",days:20,hc:1},
+    {id:"ld_c_s_fhd",cat:"룩댑",item:"캐릭터 1종",q:"S",res:"FHD",days:10, hc:1},
+    {id:"ld_c_s_4k", cat:"룩댑",item:"캐릭터 1종",q:"S",res:"4K", days:15, hc:1},
+    {id:"ld_c_a_fhd",cat:"룩댑",item:"캐릭터 1종",q:"A",res:"FHD",days:4,  hc:1},
+    {id:"ld_c_a_4k", cat:"룩댑",item:"캐릭터 1종",q:"A",res:"4K", days:5,  hc:1},
+    {id:"ld_c_b_fhd",cat:"룩댑",item:"캐릭터 1종",q:"B",res:"FHD",days:2,  hc:1},
+    {id:"ld_c_b_4k", cat:"룩댑",item:"캐릭터 1종",q:"B",res:"4K", days:2,  hc:1},
+    {id:"ld_b_s_fhd",cat:"룩댑",item:"배경 1종",  q:"S",res:"FHD",days:15, hc:1},
+    {id:"ld_b_s_4k", cat:"룩댑",item:"배경 1종",  q:"S",res:"4K", days:20, hc:1},
+    {id:"ld_b_a_fhd",cat:"룩댑",item:"배경 1종",  q:"A",res:"FHD",days:10, hc:1},
+    {id:"ld_b_a_4k", cat:"룩댑",item:"배경 1종",  q:"A",res:"4K", days:15, hc:1},
+    {id:"ld_b_b_fhd",cat:"룩댑",item:"배경 1종",  q:"B",res:"FHD",days:7,  hc:1},
+    {id:"ld_b_b_4k", cat:"룩댑",item:"배경 1종",  q:"B",res:"4K", days:10, hc:1},
+    {id:"ld_p_s_fhd",cat:"룩댑",item:"프랍 1종",  q:"S",res:"FHD",days:4,  hc:1},
+    {id:"ld_p_s_4k", cat:"룩댑",item:"프랍 1종",  q:"S",res:"4K", days:5,  hc:1},
+    {id:"ld_p_a_fhd",cat:"룩댑",item:"프랍 1종",  q:"A",res:"FHD",days:2,  hc:1},
+    {id:"ld_p_a_4k", cat:"룩댑",item:"프랍 1종",  q:"A",res:"4K", days:2,  hc:1},
+    {id:"ld_p_b_fhd",cat:"룩댑",item:"프랍 1종",  q:"B",res:"FHD",days:0.5,hc:1},
+    {id:"ld_p_b_4k", cat:"룩댑",item:"프랍 1종",  q:"B",res:"4K", days:0.5,hc:1},
+    {id:"r_c_s",cat:"리깅",item:"캐릭터 1종",q:"S",res:"",days:10,hc:1},
+    {id:"r_c_a",cat:"리깅",item:"캐릭터 1종",q:"A",res:"",days:7, hc:1},
+    {id:"r_c_b",cat:"리깅",item:"캐릭터 1종",q:"B",res:"",days:5, hc:1},
+    {id:"r_p_s",cat:"리깅",item:"프랍 1종",  q:"S",res:"",days:5, hc:1},
+    {id:"r_p_a",cat:"리깅",item:"프랍 1종",  q:"A",res:"",days:3, hc:1},
+    {id:"r_p_b",cat:"리깅",item:"프랍 1종",  q:"B",res:"",days:1, hc:1},
+  ],
+  production:[
+    {id:"an_s_24",cat:"애니메이션",q:"S",res:"",   fps:24,spw:4,  hc:1},
+    {id:"an_s_30",cat:"애니메이션",q:"S",res:"",   fps:30,spw:3.5,hc:1},
+    {id:"an_a_24",cat:"애니메이션",q:"A",res:"",   fps:24,spw:6,  hc:1},
+    {id:"an_a_30",cat:"애니메이션",q:"A",res:"",   fps:30,spw:5.2,hc:1},
+    {id:"an_b_24",cat:"애니메이션",q:"B",res:"",   fps:24,spw:9,  hc:1},
+    {id:"an_b_30",cat:"애니메이션",q:"B",res:"",   fps:30,spw:7.9,hc:1},
+    {id:"lr_s_fhd_24",cat:"라이팅&렌더",q:"S",res:"FHD",fps:24,spw:4,  hc:1},
+    {id:"lr_s_fhd_30",cat:"라이팅&렌더",q:"S",res:"FHD",fps:30,spw:3,  hc:1},
+    {id:"lr_s_4k_24", cat:"라이팅&렌더",q:"S",res:"4K", fps:24,spw:3,  hc:1},
+    {id:"lr_s_4k_30", cat:"라이팅&렌더",q:"S",res:"4K", fps:30,spw:2,  hc:1},
+    {id:"lr_a_fhd_24",cat:"라이팅&렌더",q:"A",res:"FHD",fps:24,spw:6,  hc:1},
+    {id:"lr_a_fhd_30",cat:"라이팅&렌더",q:"A",res:"FHD",fps:30,spw:4,  hc:1},
+    {id:"lr_a_4k_24", cat:"라이팅&렌더",q:"A",res:"4K", fps:24,spw:5,  hc:1},
+    {id:"lr_a_4k_30", cat:"라이팅&렌더",q:"A",res:"4K", fps:30,spw:3,  hc:1},
+    {id:"lr_b_fhd_24",cat:"라이팅&렌더",q:"B",res:"FHD",fps:24,spw:9,  hc:1},
+    {id:"lr_b_fhd_30",cat:"라이팅&렌더",q:"B",res:"FHD",fps:30,spw:7,  hc:1},
+    {id:"lr_b_4k_24", cat:"라이팅&렌더",q:"B",res:"4K", fps:24,spw:7,  hc:1},
+    {id:"lr_b_4k_30", cat:"라이팅&렌더",q:"B",res:"4K", fps:30,spw:5,  hc:1},
+    {id:"fx_s_24",cat:"FX",q:"S",res:"",fps:24,spw:4,  hc:1},
+    {id:"fx_s_30",cat:"FX",q:"S",res:"",fps:30,spw:3.5,hc:1},
+    {id:"fx_a_24",cat:"FX",q:"A",res:"",fps:24,spw:6,  hc:1},
+    {id:"fx_a_30",cat:"FX",q:"A",res:"",fps:30,spw:5.2,hc:1},
+    {id:"fx_b_24",cat:"FX",q:"B",res:"",fps:24,spw:9,  hc:1},
+    {id:"fx_b_30",cat:"FX",q:"B",res:"",fps:30,spw:7.9,hc:1},
+    {id:"co_s_fhd_24",cat:"합성",q:"S",res:"FHD",fps:24,spw:4,  hc:1},
+    {id:"co_s_fhd_30",cat:"합성",q:"S",res:"FHD",fps:30,spw:3,  hc:1},
+    {id:"co_s_4k_24", cat:"합성",q:"S",res:"4K", fps:24,spw:3,  hc:1},
+    {id:"co_s_4k_30", cat:"합성",q:"S",res:"4K", fps:30,spw:2,  hc:1},
+    {id:"co_a_fhd_24",cat:"합성",q:"A",res:"FHD",fps:24,spw:6,  hc:1},
+    {id:"co_a_fhd_30",cat:"합성",q:"A",res:"FHD",fps:30,spw:4,  hc:1},
+    {id:"co_a_4k_24", cat:"합성",q:"A",res:"4K", fps:24,spw:5,  hc:1},
+    {id:"co_a_4k_30", cat:"합성",q:"A",res:"4K", fps:30,spw:3,  hc:1},
+    {id:"co_b_fhd_24",cat:"합성",q:"B",res:"FHD",fps:24,spw:9,  hc:1},
+    {id:"co_b_fhd_30",cat:"합성",q:"B",res:"FHD",fps:30,spw:7,  hc:1},
+    {id:"co_b_4k_24", cat:"합성",q:"B",res:"4K", fps:24,spw:7,  hc:1},
+    {id:"co_b_4k_30", cat:"합성",q:"B",res:"4K", fps:30,spw:5,  hc:1},
+    {id:"sim_s_24",cat:"시뮬레이션",q:"S",res:"",fps:24,spw:4,  hc:1},
+    {id:"sim_s_30",cat:"시뮬레이션",q:"S",res:"",fps:30,spw:3.5,hc:1},
+    {id:"sim_a_24",cat:"시뮬레이션",q:"A",res:"",fps:24,spw:6,  hc:1},
+    {id:"sim_a_30",cat:"시뮬레이션",q:"A",res:"",fps:30,spw:5.2,hc:1},
+    {id:"sim_b_24",cat:"시뮬레이션",q:"B",res:"",fps:24,spw:9,  hc:1},
+    {id:"sim_b_30",cat:"시뮬레이션",q:"B",res:"",fps:30,spw:7.9,hc:1},
+    {id:"ur_s_fhd_24",cat:"언리얼",q:"S",res:"FHD",fps:24,spw:4,  hc:1},
+    {id:"ur_s_fhd_30",cat:"언리얼",q:"S",res:"FHD",fps:30,spw:3,  hc:1},
+    {id:"ur_s_4k_24", cat:"언리얼",q:"S",res:"4K", fps:24,spw:3,  hc:1},
+    {id:"ur_s_4k_30", cat:"언리얼",q:"S",res:"4K", fps:30,spw:2,  hc:1},
+    {id:"ur_a_fhd_24",cat:"언리얼",q:"A",res:"FHD",fps:24,spw:6,  hc:1},
+    {id:"ur_a_fhd_30",cat:"언리얼",q:"A",res:"FHD",fps:30,spw:4,  hc:1},
+    {id:"ur_a_4k_24", cat:"언리얼",q:"A",res:"4K", fps:24,spw:5,  hc:1},
+    {id:"ur_a_4k_30", cat:"언리얼",q:"A",res:"4K", fps:30,spw:3,  hc:1},
+    {id:"ur_b_fhd_24",cat:"언리얼",q:"B",res:"FHD",fps:24,spw:9,  hc:1},
+    {id:"ur_b_fhd_30",cat:"언리얼",q:"B",res:"FHD",fps:30,spw:7,  hc:1},
+    {id:"ur_b_4k_24", cat:"언리얼",q:"B",res:"4K", fps:24,spw:7,  hc:1},
+    {id:"ur_b_4k_30", cat:"언리얼",q:"B",res:"4K", fps:30,spw:5,  hc:1},
+  // Game Cinematic MG values (image 2 — hc:1)
+    {id:"mg_s_fhd_24",cat:"모션그래픽",q:"S",res:"FHD",fps:24,spw:10, hc:1},
+    {id:"mg_s_fhd_30",cat:"모션그래픽",q:"S",res:"FHD",fps:30,spw:8,  hc:1},
+    {id:"mg_s_4k_24", cat:"모션그래픽",q:"S",res:"4K", fps:24,spw:8,  hc:1},
+    {id:"mg_s_4k_30", cat:"모션그래픽",q:"S",res:"4K", fps:30,spw:6,  hc:1},
+    {id:"mg_a_fhd_24",cat:"모션그래픽",q:"A",res:"FHD",fps:24,spw:15, hc:1},
+    {id:"mg_a_fhd_30",cat:"모션그래픽",q:"A",res:"FHD",fps:30,spw:13, hc:1},
+    {id:"mg_a_4k_24", cat:"모션그래픽",q:"A",res:"4K", fps:24,spw:13, hc:1},
+    {id:"mg_a_4k_30", cat:"모션그래픽",q:"A",res:"4K", fps:30,spw:11, hc:1},
+    {id:"mg_b_fhd_24",cat:"모션그래픽",q:"B",res:"FHD",fps:24,spw:20, hc:1},
+    {id:"mg_b_fhd_30",cat:"모션그래픽",q:"B",res:"FHD",fps:30,spw:18, hc:1},
+    {id:"mg_b_4k_24", cat:"모션그래픽",q:"B",res:"4K", fps:24,spw:18, hc:1},
+    {id:"mg_b_4k_30", cat:"모션그래픽",q:"B",res:"4K", fps:30,spw:16, hc:1},
+  ]
+};
+
+/* ── 3D 애니메이션 (values = Game Cinematic × 0.75) ── */
+const DEFAULT_STANDARDS_ANIMATION = {
+  preproduction:[
+    _mkPP("pp_d_c_s","디자인","캐릭터 1종","S",15), _mkPP("pp_d_c_a","디자인","캐릭터 1종","A",11.25), _mkPP("pp_d_c_b","디자인","캐릭터 1종","B",7.5),
+    _mkPP("pp_d_p_s","디자인","프랍 1종",  "S",7.5), _mkPP("pp_d_p_a","디자인","프랍 1종",  "A",3.75),  _mkPP("pp_d_p_b","디자인","프랍 1종",  "B",1.5),
+    _mkPP("pp_d_b_s","디자인","배경 1종",  "S",30), _mkPP("pp_d_b_a","디자인","배경 1종",  "A",22.5), _mkPP("pp_d_b_b","디자인","배경 1종",  "B",15),
+    _mkPP("pp_sb_s", "스토리보드/릴","1분","S",1.5), _mkPP("pp_sb_a","스토리보드/릴","1분","A",1), _mkPP("pp_sb_b","스토리보드/릴","1분","B",0.5),
+  ],
+  asset:[
+    {id:"m_c_s",cat:"모델링",item:"캐릭터 1종",q:"S",res:"",days:15,   hc:1},
+    {id:"m_c_a",cat:"모델링",item:"캐릭터 1종",q:"A",res:"",days:11.25,hc:1},
+    {id:"m_c_b",cat:"모델링",item:"캐릭터 1종",q:"B",res:"",days:7.5,  hc:1},
+    {id:"m_p_s",cat:"모델링",item:"프랍 1종",  q:"S",res:"",days:7.5,  hc:1},
+    {id:"m_p_a",cat:"모델링",item:"프랍 1종",  q:"A",res:"",days:3.75, hc:1},
+    {id:"m_p_b",cat:"모델링",item:"프랍 1종",  q:"B",res:"",days:1.5,  hc:1},
+    {id:"m_b_s",cat:"모델링",item:"배경 1종",  q:"S",res:"",days:30,   hc:1},
+    {id:"m_b_a",cat:"모델링",item:"배경 1종",  q:"A",res:"",days:22.5, hc:1},
+    {id:"m_b_b",cat:"모델링",item:"배경 1종",  q:"B",res:"",days:15,   hc:1},
+    {id:"ld_c_s_fhd",cat:"룩댑",item:"캐릭터 1종",q:"S",res:"FHD",days:10, hc:1},
+    {id:"ld_c_s_4k", cat:"룩댑",item:"캐릭터 1종",q:"S",res:"4K", days:15, hc:1},
+    {id:"ld_c_a_fhd",cat:"룩댑",item:"캐릭터 1종",q:"A",res:"FHD",days:4,  hc:1},
+    {id:"ld_c_a_4k", cat:"룩댑",item:"캐릭터 1종",q:"A",res:"4K", days:5,  hc:1},
+    {id:"ld_c_b_fhd",cat:"룩댑",item:"캐릭터 1종",q:"B",res:"FHD",days:2,  hc:1},
+    {id:"ld_c_b_4k", cat:"룩댑",item:"캐릭터 1종",q:"B",res:"4K", days:2,  hc:1},
+    {id:"ld_b_s_fhd",cat:"룩댑",item:"배경 1종",  q:"S",res:"FHD",days:15, hc:1},
+    {id:"ld_b_s_4k", cat:"룩댑",item:"배경 1종",  q:"S",res:"4K", days:20, hc:1},
+    {id:"ld_b_a_fhd",cat:"룩댑",item:"배경 1종",  q:"A",res:"FHD",days:10, hc:1},
+    {id:"ld_b_a_4k", cat:"룩댑",item:"배경 1종",  q:"A",res:"4K", days:15, hc:1},
+    {id:"ld_b_b_fhd",cat:"룩댑",item:"배경 1종",  q:"B",res:"FHD",days:7,  hc:1},
+    {id:"ld_b_b_4k", cat:"룩댑",item:"배경 1종",  q:"B",res:"4K", days:10, hc:1},
+    {id:"ld_p_s_fhd",cat:"룩댑",item:"프랍 1종",  q:"S",res:"FHD",days:4,  hc:1},
+    {id:"ld_p_s_4k", cat:"룩댑",item:"프랍 1종",  q:"S",res:"4K", days:5,  hc:1},
+    {id:"ld_p_a_fhd",cat:"룩댑",item:"프랍 1종",  q:"A",res:"FHD",days:2,  hc:1},
+    {id:"ld_p_a_4k", cat:"룩댑",item:"프랍 1종",  q:"A",res:"4K", days:2,  hc:1},
+    {id:"ld_p_b_fhd",cat:"룩댑",item:"프랍 1종",  q:"B",res:"FHD",days:0.5,hc:1},
+    {id:"ld_p_b_4k", cat:"룩댑",item:"프랍 1종",  q:"B",res:"4K", days:0.5,hc:1},
+    {id:"r_c_s",cat:"리깅",item:"캐릭터 1종",q:"S",res:"",days:7.5,  hc:1},
+    {id:"r_c_a",cat:"리깅",item:"캐릭터 1종",q:"A",res:"",days:5.25, hc:1},
+    {id:"r_c_b",cat:"리깅",item:"캐릭터 1종",q:"B",res:"",days:3.75, hc:1},
+    {id:"r_p_s",cat:"리깅",item:"프랍 1종",  q:"S",res:"",days:3.75, hc:1},
+    {id:"r_p_a",cat:"리깅",item:"프랍 1종",  q:"A",res:"",days:2.25, hc:1},
+    {id:"r_p_b",cat:"리깅",item:"프랍 1종",  q:"B",res:"",days:0.75, hc:1},
+  ],
+  production:[
+    {id:"an_s_24",cat:"애니메이션",q:"S",res:"",   fps:24,spw:5.33, hc:1},
+    {id:"an_s_30",cat:"애니메이션",q:"S",res:"",   fps:30,spw:4.67, hc:1},
+    {id:"an_a_24",cat:"애니메이션",q:"A",res:"",   fps:24,spw:8,    hc:1},
+    {id:"an_a_30",cat:"애니메이션",q:"A",res:"",   fps:30,spw:6.93, hc:1},
+    {id:"an_b_24",cat:"애니메이션",q:"B",res:"",   fps:24,spw:12,   hc:1},
+    {id:"an_b_30",cat:"애니메이션",q:"B",res:"",   fps:30,spw:10.53,hc:1},
+    {id:"lr_s_fhd_24",cat:"라이팅&렌더",q:"S",res:"FHD",fps:24,spw:5.33,hc:1},
+    {id:"lr_s_fhd_30",cat:"라이팅&렌더",q:"S",res:"FHD",fps:30,spw:4,   hc:1},
+    {id:"lr_s_4k_24", cat:"라이팅&렌더",q:"S",res:"4K", fps:24,spw:4,   hc:1},
+    {id:"lr_s_4k_30", cat:"라이팅&렌더",q:"S",res:"4K", fps:30,spw:2.67,hc:1},
+    {id:"lr_a_fhd_24",cat:"라이팅&렌더",q:"A",res:"FHD",fps:24,spw:8,   hc:1},
+    {id:"lr_a_fhd_30",cat:"라이팅&렌더",q:"A",res:"FHD",fps:30,spw:5.33,hc:1},
+    {id:"lr_a_4k_24", cat:"라이팅&렌더",q:"A",res:"4K", fps:24,spw:6.67,hc:1},
+    {id:"lr_a_4k_30", cat:"라이팅&렌더",q:"A",res:"4K", fps:30,spw:4,   hc:1},
+    {id:"lr_b_fhd_24",cat:"라이팅&렌더",q:"B",res:"FHD",fps:24,spw:12,  hc:1},
+    {id:"lr_b_fhd_30",cat:"라이팅&렌더",q:"B",res:"FHD",fps:30,spw:9.33,hc:1},
+    {id:"lr_b_4k_24", cat:"라이팅&렌더",q:"B",res:"4K", fps:24,spw:9.33,hc:1},
+    {id:"lr_b_4k_30", cat:"라이팅&렌더",q:"B",res:"4K", fps:30,spw:6.67,hc:1},
+    {id:"fx_s_24",cat:"FX",q:"S",res:"",fps:24,spw:5.33, hc:1},
+    {id:"fx_s_30",cat:"FX",q:"S",res:"",fps:30,spw:4.67, hc:1},
+    {id:"fx_a_24",cat:"FX",q:"A",res:"",fps:24,spw:8,    hc:1},
+    {id:"fx_a_30",cat:"FX",q:"A",res:"",fps:30,spw:6.93, hc:1},
+    {id:"fx_b_24",cat:"FX",q:"B",res:"",fps:24,spw:12,   hc:1},
+    {id:"fx_b_30",cat:"FX",q:"B",res:"",fps:30,spw:10.53,hc:1},
+    {id:"co_s_fhd_24",cat:"합성",q:"S",res:"FHD",fps:24,spw:5.33,hc:1},
+    {id:"co_s_fhd_30",cat:"합성",q:"S",res:"FHD",fps:30,spw:4,   hc:1},
+    {id:"co_s_4k_24", cat:"합성",q:"S",res:"4K", fps:24,spw:4,   hc:1},
+    {id:"co_s_4k_30", cat:"합성",q:"S",res:"4K", fps:30,spw:2.67,hc:1},
+    {id:"co_a_fhd_24",cat:"합성",q:"A",res:"FHD",fps:24,spw:8,   hc:1},
+    {id:"co_a_fhd_30",cat:"합성",q:"A",res:"FHD",fps:30,spw:5.33,hc:1},
+    {id:"co_a_4k_24", cat:"합성",q:"A",res:"4K", fps:24,spw:6.67,hc:1},
+    {id:"co_a_4k_30", cat:"합성",q:"A",res:"4K", fps:30,spw:4,   hc:1},
+    {id:"co_b_fhd_24",cat:"합성",q:"B",res:"FHD",fps:24,spw:12,  hc:1},
+    {id:"co_b_fhd_30",cat:"합성",q:"B",res:"FHD",fps:30,spw:9.33,hc:1},
+    {id:"co_b_4k_24", cat:"합성",q:"B",res:"4K", fps:24,spw:9.33,hc:1},
+    {id:"co_b_4k_30", cat:"합성",q:"B",res:"4K", fps:30,spw:6.67,hc:1},
+    {id:"sim_s_24",cat:"시뮬레이션",q:"S",res:"",fps:24,spw:5.33, hc:1},
+    {id:"sim_s_30",cat:"시뮬레이션",q:"S",res:"",fps:30,spw:4.67, hc:1},
+    {id:"sim_a_24",cat:"시뮬레이션",q:"A",res:"",fps:24,spw:8,    hc:1},
+    {id:"sim_a_30",cat:"시뮬레이션",q:"A",res:"",fps:30,spw:6.93, hc:1},
+    {id:"sim_b_24",cat:"시뮬레이션",q:"B",res:"",fps:24,spw:12,   hc:1},
+    {id:"sim_b_30",cat:"시뮬레이션",q:"B",res:"",fps:30,spw:10.53,hc:1},
+    {id:"ur_s_fhd_24",cat:"언리얼",q:"S",res:"FHD",fps:24,spw:4,  hc:0.75},
+    {id:"ur_s_fhd_30",cat:"언리얼",q:"S",res:"FHD",fps:30,spw:3,  hc:0.75},
+    {id:"ur_s_4k_24", cat:"언리얼",q:"S",res:"4K", fps:24,spw:3,  hc:0.75},
+    {id:"ur_s_4k_30", cat:"언리얼",q:"S",res:"4K", fps:30,spw:2,  hc:0.75},
+    {id:"ur_a_fhd_24",cat:"언리얼",q:"A",res:"FHD",fps:24,spw:6,  hc:0.75},
+    {id:"ur_a_fhd_30",cat:"언리얼",q:"A",res:"FHD",fps:30,spw:4,  hc:0.75},
+    {id:"ur_a_4k_24", cat:"언리얼",q:"A",res:"4K", fps:24,spw:5,  hc:0.75},
+    {id:"ur_a_4k_30", cat:"언리얼",q:"A",res:"4K", fps:30,spw:3,  hc:0.75},
+    {id:"ur_b_fhd_24",cat:"언리얼",q:"B",res:"FHD",fps:24,spw:9,  hc:0.75},
+    {id:"ur_b_fhd_30",cat:"언리얼",q:"B",res:"FHD",fps:30,spw:7,  hc:0.75},
+    {id:"ur_b_4k_24", cat:"언리얼",q:"B",res:"4K", fps:24,spw:7,  hc:0.75},
+    {id:"ur_b_4k_30", cat:"언리얼",q:"B",res:"4K", fps:30,spw:5,  hc:0.75},
+  // 3D Animation MG values (image 1 — hc:0.75)
+    {id:"mg_s_fhd_24",cat:"모션그래픽",q:"S",res:"FHD",fps:24,spw:10, hc:0.75},
+    {id:"mg_s_fhd_30",cat:"모션그래픽",q:"S",res:"FHD",fps:30,spw:8,  hc:0.75},
+    {id:"mg_s_4k_24", cat:"모션그래픽",q:"S",res:"4K", fps:24,spw:8,  hc:0.75},
+    {id:"mg_s_4k_30", cat:"모션그래픽",q:"S",res:"4K", fps:30,spw:6,  hc:0.75},
+    {id:"mg_a_fhd_24",cat:"모션그래픽",q:"A",res:"FHD",fps:24,spw:15, hc:0.75},
+    {id:"mg_a_fhd_30",cat:"모션그래픽",q:"A",res:"FHD",fps:30,spw:13, hc:0.75},
+    {id:"mg_a_4k_24", cat:"모션그래픽",q:"A",res:"4K", fps:24,spw:13, hc:0.75},
+    {id:"mg_a_4k_30", cat:"모션그래픽",q:"A",res:"4K", fps:30,spw:11, hc:0.75},
+    {id:"mg_b_fhd_24",cat:"모션그래픽",q:"B",res:"FHD",fps:24,spw:20, hc:0.75},
+    {id:"mg_b_fhd_30",cat:"모션그래픽",q:"B",res:"FHD",fps:30,spw:18, hc:0.75},
+    {id:"mg_b_4k_24", cat:"모션그래픽",q:"B",res:"4K", fps:24,spw:18, hc:0.75},
+    {id:"mg_b_4k_30", cat:"모션그래픽",q:"B",res:"4K", fps:30,spw:16, hc:0.75},
+  ]
+};
+
+const DEFAULT_ALL_STANDARDS = {
+  cinematic: DEFAULT_STANDARDS_CINEMATIC,
+  animation: DEFAULT_STANDARDS_ANIMATION,
+};
+
+const DEFAULT_INTERNAL_STAFF = {
+  pd:1, director:1, coordinator:2, art_director:1, sub_director:1,
+  designer:10, storyboard_artist:4, animation_lead:1, lighting_lead:1,
+  modeler:12, texture_shading:7, rigger:4, animator:10,
+  lighting_render:12, fx_artist:4, motion_graphic_artist:1, unreal_artist:2, compositor:4, simulator:4,
+};
+
+/* ── 작업량 계산 (수동 조정 시 HC 역산용) ──────────────────────────────── */
+function calcWorkVolumes(project, standards) {
+  if (!project || !standards) return {};
+  const q = project.qualityGrade || "A";
+  const fps = Number(project.fps) || 24;
+  const res = (project.resolution||"").includes("3840") ? "4K" : "FHD";
+  const totalSecs = Number(project.duration) || 0;
+  let charS=Number(project.charS)||0, charA=Number(project.charA)||0, charB=Number(project.charB)||0;
+  let propS=Number(project.propS)||0, propA=Number(project.propA)||0, propB=Number(project.propB)||0;
+  let bgS=Number(project.bgS)||0, bgA=Number(project.bgA)||0, bgB=Number(project.bgB)||0;
+  if (charS+charA+charB+propS+propA+propB+bgS+bgA+bgB === 0) {
+    const oc=Number(project.charCount)||0, op=Number(project.propCount)||0, ob=Number(project.bgCount)||0;
+    if (oc+op+ob > 0) {
+      if (q==="S") { charS+=oc; propS+=op; bgS+=ob; }
+      else if (q==="B") { charB+=oc; propB+=op; bgB+=ob; }
+      else { charA+=oc; propA+=op; bgA+=ob; }
+    }
+  }
+  const fa = (cat, item, qual, resolution) =>
+    (standards.asset||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual&&(!resolution||s.res===resolution));
+  const fp = (cat, qual, fpsVal, resolution) =>
+    (standards.production||[]).find(s=>s.cat===cat&&s.q===qual&&s.fps===fpsVal&&(!resolution||s.res===resolution));
+
+  const modelWork = charS*(fa("모델링","캐릭터 1종","S")?.days||0) + charA*(fa("모델링","캐릭터 1종","A")?.days||0) + charB*(fa("모델링","캐릭터 1종","B")?.days||0)
+                  + propS*(fa("모델링","프랍 1종","S")?.days||0)   + propA*(fa("모델링","프랍 1종","A")?.days||0)   + propB*(fa("모델링","프랍 1종","B")?.days||0)
+                  + bgS*(fa("모델링","배경 1종","S")?.days||0)     + bgA*(fa("모델링","배경 1종","A")?.days||0)     + bgB*(fa("모델링","배경 1종","B")?.days||0);
+  const ldWork    = charS*(fa("룩댑","캐릭터 1종","S",res)?.days||0) + charA*(fa("룩댑","캐릭터 1종","A",res)?.days||0) + charB*(fa("룩댑","캐릭터 1종","B",res)?.days||0)
+                  + bgS*(fa("룩댑","배경 1종","S",res)?.days||0)     + bgA*(fa("룩댑","배경 1종","A",res)?.days||0)     + bgB*(fa("룩댑","배경 1종","B",res)?.days||0);
+  const rigWork   = charS*(fa("리깅","캐릭터 1종","S")?.days||0) + charA*(fa("리깅","캐릭터 1종","A")?.days||0) + charB*(fa("리깅","캐릭터 1종","B")?.days||0)
+                  + propS*(fa("리깅","프랍 1종","S")?.days||0)   + propA*(fa("리깅","프랍 1종","A")?.days||0)   + propB*(fa("리깅","프랍 1종","B")?.days||0);
+
+  const anSpw    = fp("애니메이션",q,fps)?.spw        || 1;
+  const lrSpw    = fp("라이팅&렌더",q,fps,res)?.spw   || 1;
+  const fxSpw    = fp("FX",q,fps)?.spw                || 1;
+  const simSpw   = fp("시뮬레이션",q,fps)?.spw         || 1;
+  const coSpw    = fp("합성",q,fps,res)?.spw           || 1;
+  const unrealSpw = fp("언리얼",q,fps,res)?.spw        || lrSpw;
+  const w = spwVal => totalSecs > 0 ? (totalSecs / spwVal) * 7 : 0;
+
+  // Asset-based hard cap: can't assign more people than discrete assets
+  const maxModelHC = (charS+charA+charB) + (propS+propA+propB) + (bgS*4 + bgA*3 + bgB*3);
+  const maxLdHC    = (charS+charA+charB) + (bgS*4 + bgA*3 + bgB*3);
+  const maxRigHC   = (charS+charA+charB) + (propS+propA+propB);
+
+  return {
+    modeling:        {work: modelWork, maxHC: maxModelHC},
+    texture_shading: {work: ldWork,    maxHC: maxLdHC},
+    rigging:         {work: rigWork,   maxHC: maxRigHC},
+    animation_main:  {work: w(anSpw),  maxHC: 0},
+    animation_lead:  {work: w(anSpw),  maxHC: 0},
+    lighting_render: {work: w(lrSpw) * (project.isUnreal ? 0.85 : 1), maxHC: 0},
+    lighting_lead:   {work: w(lrSpw) * (project.isUnreal ? 0.85 : 1), maxHC: 0},
+    fx:              {work: w(fxSpw),  maxHC: 0},
+    simulation:      {work: w(simSpw), maxHC: 0},
+    composition:     {work: w(coSpw),  maxHC: 0},
+    unreal:          {work: w(unrealSpw), maxHC: 0},
+  };
+}
+
+/* ── 자동 스케줄 계산 ───────────────────────────────────────────────────── */
+function calcAutoSchedule(project, standards, projectStartDate, internalStaff) {
+  const q   = project.qualityGrade || "A";
+  const fps = Number(project.fps) || 24;
+  const res = (project.resolution||"").includes("3840") ? "4K" : "FHD";
+  const totalSecs = Number(project.duration) || 0;
+  // Per-difficulty asset counts
+  let charS = Number(project.charS)||0; let charA = Number(project.charA)||0; let charB = Number(project.charB)||0;
+  let propS = Number(project.propS)||0; let propA = Number(project.propA)||0; let propB = Number(project.propB)||0;
+  let bgS   = Number(project.bgS)  ||0; let bgA   = Number(project.bgA)  ||0; let bgB   = Number(project.bgB)  ||0;
+  const totalAssets = charS+charA+charB+propS+propA+propB+bgS+bgA+bgB;
+  // Backward compat: old projects stored flat charCount/propCount/bgCount
+  if (totalAssets === 0) {
+    const oc = Number(project.charCount)||0, op = Number(project.propCount)||0, ob = Number(project.bgCount)||0;
+    if (oc+op+ob > 0) {
+      if (q==="S") { charS+=oc; propS+=op; bgS+=ob; }
+      else if (q==="B") { charB+=oc; propB+=op; bgB+=ob; }
+      else { charA+=oc; propA+=op; bgA+=ob; }
+    }
+  }
+  const start = projectStartDate || new Date().toISOString().slice(0,10);
+  // Only enforce deadline if it's actually after the project start date
+  const deadline = (project.deadline && project.deadline > start) ? project.deadline : null;
+
+  if (totalSecs === 0 && (charS+charA+charB+propS+propA+propB+bgS+bgA+bgB) === 0) {
+    return {phases:[], headcounts:{}};
+  }
+
+  const fa = (cat, item, qual, resolution) =>
+    (standards.asset||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual&&(!resolution||s.res===resolution));
+  const fp = (cat, qual, fpsVal, resolution) =>
+    (standards.production||[]).find(s=>s.cat===cat&&s.q===qual&&s.fps===fpsVal&&(!resolution||s.res===resolution));
+
+  // Base work volume summed across all difficulty levels
+  const modelWork = charS*(fa("모델링","캐릭터 1종","S")?.days||0) + charA*(fa("모델링","캐릭터 1종","A")?.days||0) + charB*(fa("모델링","캐릭터 1종","B")?.days||0)
+                  + propS*(fa("모델링","프랍 1종","S")?.days||0)   + propA*(fa("모델링","프랍 1종","A")?.days||0)   + propB*(fa("모델링","프랍 1종","B")?.days||0)
+                  + bgS*(fa("모델링","배경 1종","S")?.days||0)     + bgA*(fa("모델링","배경 1종","A")?.days||0)     + bgB*(fa("모델링","배경 1종","B")?.days||0);
+  const ldWork    = charS*(fa("룩댑","캐릭터 1종","S",res)?.days||0) + charA*(fa("룩댑","캐릭터 1종","A",res)?.days||0) + charB*(fa("룩댑","캐릭터 1종","B",res)?.days||0)
+                  + bgS*(fa("룩댑","배경 1종","S",res)?.days||0)     + bgA*(fa("룩댑","배경 1종","A",res)?.days||0)     + bgB*(fa("룩댑","배경 1종","B",res)?.days||0);
+  const rigWork   = charS*(fa("리깅","캐릭터 1종","S")?.days||0) + charA*(fa("리깅","캐릭터 1종","A")?.days||0) + charB*(fa("리깅","캐릭터 1종","B")?.days||0)
+                  + propS*(fa("리깅","프랍 1종","S")?.days||0)   + propA*(fa("리깅","프랍 1종","A")?.days||0)   + propB*(fa("리깅","프랍 1종","B")?.days||0);
+
+  const anSpw    = fp("애니메이션",q,fps)?.spw       || 1;
+  const lrSpw    = fp("라이팅&렌더",q,fps,res)?.spw  || 1;
+  const fxSpw    = fp("FX",q,fps)?.spw               || 1;
+  const simSpw   = fp("시뮬레이션",q,fps)?.spw        || 1;
+  const coSpw    = fp("합성",q,fps,res)?.spw          || 1;
+  const unrealSpw = fp("언리얼",q,fps,res)?.spw       || lrSpw;
+  const mgSpw     = fp("모션그래픽",q,fps,res)?.spw   || coSpw;
+
+  // Base headcounts: internal staff, capped by asset-based limits for per-asset phases
+  const is = internalStaff || {};
+  const wv = calcWorkVolumes(project, standards);
+  const capAsset = (base, maxHC) => maxHC > 0 ? Math.min(base, maxHC) : base;
+
+  const modelHC0  = Math.max(1, capAsset(is.modeler        || 1, wv.modeling?.maxHC        || 0));
+  const ldHC0     = Math.max(1, capAsset(is.texture_shading|| 1, wv.texture_shading?.maxHC || 0));
+  const rigHC0    = Math.max(1, capAsset(is.rigger         || 1, wv.rigging?.maxHC         || 0));
+  const anHC0     = Math.max(1, is.animator              || 1);
+  const lrHC0     = Math.max(1, is.lighting_render       || 1);
+  const fxHC0     = Math.max(1, is.fx_artist             || 1);
+  const simHC0    = Math.max(1, is.simulator             || 1);
+  const coHC0     = Math.max(1, is.compositor            || 1);
+  const unrealHC0 = Math.max(1, is.unreal_artist         || 1);
+
+  // Base durations (MG excluded from auto-calc)
+  const modelDays0  = modelWork>0 ? Math.ceil(modelWork/modelHC0)             : 0;
+  const ldDays0     = ldWork>0    ? Math.ceil(ldWork/ldHC0)                   : 0;
+  const rigDays0    = rigWork>0   ? Math.ceil(rigWork/rigHC0)                 : 0;
+  const anDays0     = totalSecs>0 ? Math.ceil((totalSecs/anSpw)*7/anHC0)     : 0;
+  const lrMult      = !!project.isUnreal ? 0.85 : 1;
+  const lrDays0     = totalSecs>0 ? Math.ceil((totalSecs/lrSpw)*7/lrHC0 * lrMult) : 0;
+  const fxDays0     = totalSecs>0 ? Math.ceil((totalSecs/fxSpw)*7/fxHC0)     : 0;
+  const simDays0    = totalSecs>0 ? Math.ceil((totalSecs/simSpw)*7/simHC0)   : 0;
+  const coDays0     = totalSecs>0 ? Math.ceil((totalSecs/coSpw)*7/coHC0)     : 0;
+  const unrealDays0 = lrDays0; // Unreal runs same duration as LR
+
+  // Preprod: use preproduction standards if available, else estimate ~25% of modeling
+  const fpd = (cat, item, qual) => (standards.preproduction||[]).find(s=>s.cat===cat&&s.item===item&&s.q===qual);
+  const designWork = charS*(fpd("디자인","캐릭터 1종","S")?.days||0) + charA*(fpd("디자인","캐릭터 1종","A")?.days||0) + charB*(fpd("디자인","캐릭터 1종","B")?.days||0)
+                   + propS*(fpd("디자인","프랍 1종","S")?.days||0)   + propA*(fpd("디자인","프랍 1종","A")?.days||0)   + propB*(fpd("디자인","프랍 1종","B")?.days||0)
+                   + bgS*(fpd("디자인","배경 1종","S")?.days||0)     + bgA*(fpd("디자인","배경 1종","A")?.days||0)     + bgB*(fpd("디자인","배경 1종","B")?.days||0);
+  const designHC0   = Math.max(1, is.designer || fpd("디자인","캐릭터 1종",q)?.hc || 1);
+  const sbHC0       = Math.max(1, is.storyboard_artist || 1);
+  const designDays0 = designWork > 0 ? Math.ceil(designWork/designHC0) : 0;
+  const totalMins   = totalSecs / 60;
+  const sbEntry     = fpd("스토리보드/릴","1분",q);
+  const sbDays0     = sbEntry && totalMins > 0 ? Math.ceil(totalMins * sbEntry.days / sbHC0) : 0;
+  const prepDays0   = designDays0 > 0 || sbDays0 > 0
+    ? Math.max(designDays0, sbDays0)
+    : Math.max(10, Math.round(modelDays0 * 0.25));
+
+  const OL = 0.8;
+  const ol0 = d => Math.round(d * OL);
+  const useUnreal = !!project.isUnreal;
+
+  // Critical path with base headcounts
+  const critical0 = prepDays0
+                  + ol0(modelDays0)
+                  + ol0(Math.max(rigDays0, ldDays0))
+                  + ol0(anDays0)
+                  + ol0(Math.max(lrDays0, fxDays0, simDays0, useUnreal ? unrealDays0 : 0))
+                  + coDays0;
+
+  // If deadline set and schedule exceeds it, scale up headcounts to fit within deadline
+  let scale = 1;
+  if (deadline && critical0 > 0) {
+    const availDays = daysBetween(start, deadline);
+    if (availDays > 0 && critical0 > availDays) scale = critical0 / availDays;
+  }
+
+  const sd = d => d>0 ? Math.max(1, Math.floor(d/scale)) : 0;
+  const sh = h => Math.ceil(h*scale);
+  const ol = d => Math.round(d * OL);
+
+  const prepDays    = sd(prepDays0);
+  const modelDays   = sd(modelDays0);
+  const ldDays      = sd(ldDays0);
+  const rigDays     = sd(rigDays0);
+  const anDays      = sd(anDays0);
+  const lrDays      = sd(lrDays0);
+  const fxDays      = sd(fxDays0);
+  const simDays     = sd(simDays0);
+  const coDays      = sd(coDays0);
+  const unrealDays  = sd(unrealDays0);
+  const modelHC     = sh(modelHC0);
+  const ldHC        = sh(ldHC0);
+  const rigHC       = sh(rigHC0);
+  const anHC        = sh(anHC0);
+  const lrHC        = sh(lrHC0);
+  const fxHC        = sh(fxHC0);
+  const simHC       = sh(simHC0);
+  const coHC        = sh(coHC0);
+  const unrealHC    = sh(unrealHC0);
+
+  const mk = (phaseId, s, e, hc) => ({id:Date.now()+Math.random(),phaseId,startDate:s,endDate:e,assignee:`${hc}명`});
+
+  // Phase start/end dates with overlapping pipeline
+  // Modeling starts at the midpoint of preprod (~50% through design)
+  const prepEnd    = addDays(start, prepDays);
+  const modelStart = prepDays > 0 ? addDays(start, Math.round(prepDays / 2)) : start;
+  const modelEnd   = addDays(modelStart, modelDays);
+
+  // Rigging + LookDev: start when modeling is OL done (from modelStart)
+  const rigLdStart = addDays(modelStart, ol(modelDays));
+  const rigEnd     = addDays(rigLdStart, rigDays);
+  const ldEnd      = addDays(rigLdStart, ldDays);
+
+  // Animation: starts when max(rig, ld) is OL done
+  const anStart    = addDays(rigLdStart, ol(Math.max(rigDays, ldDays)));
+  const anEnd      = addDays(anStart, anDays);
+
+  // LR + FX + Sim + Unreal: all start when animation is OL done
+  const fxSimLrStart = addDays(anStart, ol(anDays));
+  const lrEnd        = addDays(fxSimLrStart, lrDays);
+  const fxEnd        = addDays(fxSimLrStart, fxDays);
+  const simEnd       = addDays(fxSimLrStart, simDays);
+  const unrealEnd    = addDays(fxSimLrStart, unrealDays);
+
+  // Composition: starts when max(lr, fx, sim, [unreal]) is OL done
+  const coStart = addDays(fxSimLrStart, ol(Math.max(lrDays, fxDays, simDays, useUnreal ? unrealDays : 0)));
+  const coEnd   = addDays(coStart, coDays);
+
+  const projEnd = deadline || coEnd;
+  // Cap both start and end dates to deadline; skip phase if start >= end after capping
+  const cap = e => (deadline && e > deadline) ? deadline : e;
+  const pushPhase = (phaseId, s, e, hc) => {
+    const cs = (deadline && s > deadline) ? deadline : s;
+    const ce = cap(e);
+    if (cs < ce) phases.push(mk(phaseId, cs, ce, hc));
+  };
+
+  const phases = [];
+  if (coDays > 0 || anDays > 0 || modelDays > 0) {
+    // Management: full span
+    phases.push(mk("pd",           start, projEnd, 1));
+    phases.push(mk("director",     start, projEnd, 1));
+    phases.push(mk("supervisor",   start, projEnd, 1));
+    phases.push(mk("art_director", start, projEnd, 1));
+    phases.push(mk("coordinator",  start, projEnd, 1));
+    if (project.videoType === "3D 애니메이션") {
+      phases.push(mk("sub_director", start, projEnd, 1));
+    }
+  }
+
+  // Preprod: design & storyboard in parallel
+  if (prepDays > 0) {
+    pushPhase("design",          start, cap(prepEnd), 1);
+    pushPhase("storyboard_reel", start, cap(prepEnd), 1);
+  }
+
+  if (modelDays > 0) pushPhase("modeling",        modelStart,   modelEnd,  modelHC);
+  if (rigDays  > 0) pushPhase("rigging",           rigLdStart,  rigEnd,    rigHC);
+  if (ldDays   > 0) pushPhase("texture_shading",   rigLdStart,  ldEnd,     ldHC);
+  if (anDays   > 0) pushPhase("animation_main",    anStart,     anEnd,     anHC);
+  if (lrDays   > 0) pushPhase("lighting_render",   fxSimLrStart, lrEnd,    lrHC);
+  if (fxDays   > 0) pushPhase("fx",                fxSimLrStart, fxEnd,    fxHC);
+  if (simDays  > 0) pushPhase("simulation",        fxSimLrStart, simEnd,   simHC);
+  if (useUnreal && unrealDays > 0) pushPhase("unreal",       fxSimLrStart, unrealEnd, unrealHC);
+  if (coDays   > 0) pushPhase("composition",       coStart, coEnd, coHC);
+
+  const headcounts = {model:modelHC,lookDev:ldHC,rigging:rigHC,anim:anHC,lr:lrHC,fx:fxHC,sim:simHC,comp:coHC,unreal:useUnreal?unrealHC:0};
+  return {phases, headcounts};
+}
+
+/* ── 레퍼런스 유사도 계산 ──────────────────────────────────────────────── */
+function calcSimilarity(ref, cur) {
+  let score = 0;
+  if (ref.videoType && cur.videoType && ref.videoType === cur.videoType) score += 30;
+  if (ref.qualityGrade && cur.qualityGrade && ref.qualityGrade === cur.qualityGrade) score += 15;
+  const rDur = Number(ref.duration)||0, cDur = Number(cur.duration)||0;
+  if (rDur > 0 && cDur > 0) score += Math.round((Math.min(rDur,cDur)/Math.max(rDur,cDur))*25);
+  const rA = (Number(ref.charCount)||0)+(Number(ref.propCount)||0)+(Number(ref.bgCount)||0);
+  const cA = (Number(cur.charS)||0)+(Number(cur.charA)||0)+(Number(cur.charB)||0)
+           + (Number(cur.propS)||0)+(Number(cur.propA)||0)+(Number(cur.propB)||0)
+           + (Number(cur.bgS) ||0)+(Number(cur.bgA) ||0)+(Number(cur.bgB) ||0);
+  if (rA > 0 && cA > 0) score += Math.round((Math.min(rA,cA)/Math.max(rA,cA))*20);
+  if (Number(ref.fps)===Number(cur.fps)) score += 5;
+  if (ref.resolution && cur.resolution && ref.resolution===cur.resolution) score += 5;
+  return score;
+}
+
+function calcMarkupFactor(matches) {
+  const TARGET_MARGIN = 25; // 목표 이익률 25%
+  const withData = matches.filter(m => Number(m.ref.totalAmount) > 0 && refTotalCost(m.ref) > 0);
+  if (!withData.length) return { factor: 1.0, avgMargin: null, upliftPct: 0 };
+
+  let wSum = 0, wMargin = 0;
+  withData.forEach(({ref, score}) => {
+    const margin = (Number(ref.totalAmount) - refTotalCost(ref)) / Number(ref.totalAmount) * 100;
+    wMargin += margin * score;
+    wSum += score;
+  });
+  const avgMargin = Math.round(wMargin / wSum);
+  if (avgMargin >= TARGET_MARGIN) return { factor: 1.0, avgMargin, upliftPct: 0 };
+
+  const shortfall = TARGET_MARGIN - avgMargin;
+  const upliftPct = Math.round(Math.min(shortfall * 0.8, 40)); // 최대 40%
+  return { factor: 1 + upliftPct / 100, avgMargin, upliftPct };
+}
+
+/* ── 레퍼런스 탭 ──────────────────────────────────────────────────────── */
+const BLANK_REF = {id:null,name:"",client:"",year:new Date().getFullYear()+"",videoType:"",duration:"",productionDays:"",clientDifficulty:"보통",fps:"24",qualityGrade:"A",resolution:"1920x1080",charCount:"0",propCount:"0",bgCount:"0",totalAmount:"",internalCost:"",externalCost:"",videoUrl:"",notes:""};
+const refTotalCost = r => Number(r.internalCost||0) + Number(r.externalCost||0) || Number(r.actualCost||0);
+
+function ReferenceTab({refs, onChange}) {
+  const [editing, setEditing] = React.useState(null);
+  const [viewing, setViewing] = React.useState(null); // null | ref object
+  const [search, setSearch] = React.useState("");
+  const fileRef = React.useRef(null);
+
+  const exportJSON = () => {
+    const blob = new Blob([JSON.stringify(refs, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "locus_references.json"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importJSON = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data)) { alert("올바른 형식이 아닙니다."); return; }
+        if (window.confirm(`${data.length}개의 레퍼런스를 불러옵니다. 기존 데이터를 덮어쓸까요?`)) onChange(data);
+      } catch { alert("파일을 읽는 중 오류가 발생했습니다."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const save = () => {
+    if (!editing.name) { alert("프로젝트명을 입력하세요."); return; }
+    if (editing.id) {
+      onChange(refs.map(r => r.id===editing.id ? editing : r));
+    } else {
+      onChange([{...editing, id:Date.now()}, ...refs]);
+    }
+    setEditing(null);
+  };
+
+  const del = id => {
+    if (window.confirm("이 레퍼런스를 삭제하시겠습니까?")) onChange(refs.filter(r=>r.id!==id));
+  };
+
+  const inp = {padding:"6px 10px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:13,background:"#fff",width:"100%",boxSizing:"border-box"};
+  const filteredRefs = refs.filter(r =>
+    !search || r.name.includes(search) || (r.client||"").includes(search) || (r.notes||"").includes(search)
+  );
+
+  return (
+    <div>
+      {/* 상단 컨트롤 */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,gap:12,flexWrap:"wrap"}}>
+        <div>
+          <h2 style={{margin:0,fontSize:16,fontWeight:800,color:"#1A1A2E"}}>📚 레퍼런스 프로젝트</h2>
+          <p style={{margin:"4px 0 0",fontSize:12,color:"#6B7280"}}>과거 완료 프로젝트를 등록해두면 견적 산출 전 유사 프로젝트를 자동으로 비교합니다.</p>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <input type="file" accept=".json" ref={fileRef} onChange={importJSON} style={{display:"none"}} />
+          <button onClick={()=>fileRef.current.click()} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",fontSize:13,cursor:"pointer",fontWeight:600}}>📥 가져오기</button>
+          <button onClick={exportJSON} disabled={refs.length===0} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,opacity:refs.length===0?0.4:1}}>📤 내보내기</button>
+          <button onClick={()=>setEditing({...BLANK_REF})} style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>+ 레퍼런스 등록</button>
+        </div>
+      </div>
+
+      {/* 검색 */}
+      {refs.length > 0 && (
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="프로젝트명 / 클라이언트 검색..." style={{...inp,marginBottom:14,maxWidth:320}} />
+      )}
+
+      {/* 등록 / 수정 모달 */}
+      {editing && (
+        <div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#fff",borderRadius:16,maxWidth:680,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #F3F4F6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <h3 style={{margin:0,fontSize:16,fontWeight:800,color:"#1A1A2E"}}>{editing.id?"✏️ 레퍼런스 수정":"📝 새 레퍼런스 등록"}</h3>
+              <button onClick={()=>setEditing(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9CA3AF",lineHeight:1}}>×</button>
+            </div>
+            <div style={{padding:"20px 24px"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+                {[
+                  ["프로젝트명 *","name","text"],["클라이언트","client","text"],["연도","year","number"],
+                  ["영상 길이 (초)","duration","number"],["제작 기간 (일)","productionDays","number"],
+                  ["캐릭터 수 (합계)","charCount","number"],
+                  ["프랍 수 (합계)","propCount","number"],["배경 수 (합계)","bgCount","number"],
+                  ["최종 견적액 (원)","totalAmount","number"],
+                  ["내부 비용 (원)","internalCost","number"],["외주 비용 (원)","externalCost","number"],
+                ].map(([label,field,type])=>(
+                  <label key={field} style={{display:"flex",flexDirection:"column",gap:4}}>
+                    <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>{label}</span>
+                    <input type={type} value={editing[field]||""} onChange={e=>setEditing(v=>({...v,[field]:e.target.value}))} style={inp} />
+                  </label>
+                ))}
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>영상 유형</span>
+                  <select value={editing.videoType} onChange={e=>setEditing(v=>({...v,videoType:e.target.value}))} style={inp}>
+                    <option value="">선택</option>
+                    {VIDEO_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>클라이언트 난이도</span>
+                  <select value={editing.clientDifficulty||"보통"} onChange={e=>setEditing(v=>({...v,clientDifficulty:e.target.value}))} style={inp}>
+                    {["쉬움","보통","어려움","매우 어려움"].map(d=><option key={d} value={d}>{d}</option>)}
+                  </select>
+                </label>
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>품질 등급</span>
+                  <select value={editing.qualityGrade} onChange={e=>setEditing(v=>({...v,qualityGrade:e.target.value}))} style={inp}>
+                    {["S","A","B"].map(g=><option key={g} value={g}>{g}</option>)}
+                  </select>
+                </label>
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>FPS</span>
+                  <select value={editing.fps} onChange={e=>setEditing(v=>({...v,fps:e.target.value}))} style={inp}>
+                    <option value="24">24 fps</option><option value="30">30 fps</option>
+                  </select>
+                </label>
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>해상도</span>
+                  <select value={editing.resolution} onChange={e=>setEditing(v=>({...v,resolution:e.target.value}))} style={inp}>
+                    <option value="1920x1080">FHD 1920×1080</option><option value="3840x2160">4K 3840×2160</option>
+                  </select>
+                </label>
+                <label style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>영상 링크 (YouTube, Vimeo 등)</span>
+                  <input type="url" value={editing.videoUrl||""} onChange={e=>setEditing(v=>({...v,videoUrl:e.target.value}))} placeholder="https://..." style={inp} />
+                </label>
+                <label style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#374151"}}>메모 / 특이사항</span>
+                  <textarea value={editing.notes||""} onChange={e=>setEditing(v=>({...v,notes:e.target.value}))} rows={2} style={{...inp,resize:"vertical"}} />
+                </label>
+              </div>
+              {(editing.totalAmount && (editing.internalCost || editing.externalCost)) && (() => {
+                const totalCost = Number(editing.internalCost||0) + Number(editing.externalCost||0);
+                const profit = Number(editing.totalAmount) - totalCost;
+                const margin = Math.round((profit / Number(editing.totalAmount)) * 100);
+                return (<>
+                  <div style={{marginTop:12,padding:"10px 14px",borderRadius:8,background:"#F8F9FA",border:"1px solid #E5E7EB",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+                    <span style={{fontSize:12,color:"#6B7280"}}>내부 {Number(editing.internalCost||0)>0?`₩${formatNum(Number(editing.internalCost))}`:"—"}</span>
+                    <span style={{color:"#D1D5DB"}}>+</span>
+                    <span style={{fontSize:12,color:"#6B7280"}}>외주 {Number(editing.externalCost||0)>0?`₩${formatNum(Number(editing.externalCost))}`:"—"}</span>
+                    <span style={{color:"#D1D5DB"}}>=</span>
+                    <span style={{fontSize:13,fontWeight:700,color:"#374151"}}>총 비용 ₩{formatNum(totalCost)}</span>
+                  </div>
+                  <div style={{marginTop:8,padding:"10px 14px",borderRadius:8,background:profit>=0?"rgba(52,211,153,0.1)":"rgba(239,68,68,0.08)",border:`1px solid ${profit>=0?"rgba(52,211,153,0.3)":"rgba(239,68,68,0.25)"}`,display:"flex",gap:20,flexWrap:"wrap"}}>
+                    <span style={{fontSize:12,color:"#6B7280"}}>영업이익</span>
+                    <span style={{fontWeight:800,fontSize:14,color:profit>=0?"#059669":"#EF4444"}}>₩{formatNum(Math.abs(profit))}{profit<0?" (적자)":""}</span>
+                    <span style={{fontSize:12,color:"#6B7280"}}>이익률</span>
+                    <span style={{fontWeight:700,fontSize:13,color:margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444"}}>{margin}%</span>
+                  </div>
+                </>);
+              })()}
+              <div style={{display:"flex",gap:8,marginTop:16,paddingTop:16,borderTop:"1px solid #F3F4F6"}}>
+                <button onClick={save} style={{padding:"9px 24px",borderRadius:8,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>저장</button>
+                <button onClick={()=>setEditing(null)} style={{padding:"9px 16px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",cursor:"pointer",fontSize:13}}>취소</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 목록 */}
+      {filteredRefs.length===0
+        ? <div style={{textAlign:"center",padding:"40px 0",color:"#9CA3AF",fontSize:13}}>
+            {refs.length===0 ? "등록된 레퍼런스가 없습니다. [+ 레퍼런스 등록] 버튼으로 추가하세요." : "검색 결과가 없습니다."}
+          </div>
+        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {filteredRefs.map(r=>(
+              <div key={r.id} onClick={()=>setViewing(r)} style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:12,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,cursor:"pointer",transition:"box-shadow 0.15s, border-color 0.15s"}} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.08)";e.currentTarget.style.borderColor="#C8102E33";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="#E5E7EB";}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                    <span style={{fontWeight:800,fontSize:14}}>{r.name}</span>
+                    {r.year && <span style={{fontSize:11,color:"#6B7280",background:"#F3F4F6",padding:"1px 7px",borderRadius:20}}>{r.year}</span>}
+                    {r.client && <span style={{fontSize:11,color:"#6B7280"}}>{r.client}</span>}
+                    {r.videoType && <span style={{fontSize:11,color:"#6B9ECC",background:"rgba(107,158,204,0.1)",padding:"1px 7px",borderRadius:20}}>{r.videoType}</span>}
+                    {r.qualityGrade && <span style={{fontSize:11,color:"#34D399",background:"rgba(52,211,153,0.1)",padding:"1px 7px",borderRadius:20}}>{r.qualityGrade}등급</span>}
+                  </div>
+                  <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:12,color:"#6B7280"}}>
+                    {r.duration && <span>⏱ {r.duration}초 ({r.fps||24}fps)</span>}
+                    {r.productionDays && <span>📅 제작 {r.productionDays}일</span>}
+                    {r.clientDifficulty && r.clientDifficulty!=="보통" && (
+                      <span style={{color: r.clientDifficulty==="매우 어려움"?"#EF4444":r.clientDifficulty==="어려움"?"#F59E0B":"#34D399"}}>
+                        🧑‍💼 난이도: {r.clientDifficulty}
+                      </span>
+                    )}
+                    {(Number(r.charCount)||0)+(Number(r.propCount)||0)+(Number(r.bgCount)||0) > 0 && (
+                      <span>👤 캐릭터 {r.charCount||0} · 프랍 {r.propCount||0} · 배경 {r.bgCount||0}</span>
+                    )}
+                    {r.resolution && <span>🖥 {r.resolution.includes("3840")?"4K":"FHD"}</span>}
+                  </div>
+                  {r.videoUrl && (
+                    <div style={{marginTop:6}}>
+                      <a href={r.videoUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:"#3B82C4",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>
+                        🎬 영상 보기
+                      </a>
+                    </div>
+                  )}
+                  {r.notes && <div style={{marginTop:4,fontSize:12,color:"#9CA3AF",fontStyle:"italic"}}>{r.notes}</div>}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8,flexShrink:0}}>
+                  {r.totalAmount ? (() => {
+                    const tc = refTotalCost(r);
+                    const profit = tc > 0 ? Number(r.totalAmount) - tc : null;
+                    const margin = profit !== null ? Math.round((profit / Number(r.totalAmount)) * 100) : null;
+                    return (
+                      <div style={{textAlign:"right",display:"flex",flexDirection:"column",gap:3}}>
+                        <div><div style={{fontSize:10,color:"#6B7280"}}>최종 견적</div><div style={{fontWeight:800,fontSize:14,color:"#C8102E"}}>₩{formatNum(Number(r.totalAmount))}</div></div>
+                        {tc > 0 && <div><div style={{fontSize:10,color:"#6B7280"}}>총 비용</div><div style={{fontWeight:700,fontSize:13,color:"#374151"}}>₩{formatNum(tc)}</div></div>}
+                        {profit !== null && <div style={{padding:"3px 8px",borderRadius:6,background:profit>=0?"rgba(52,211,153,0.12)":"rgba(239,68,68,0.08)"}}>
+                          <span style={{fontSize:11,fontWeight:800,color:profit>=0?"#059669":"#EF4444"}}>영업이익 {profit>=0?"+":"-"}₩{formatNum(Math.abs(profit))}</span>
+                          <span style={{fontSize:10,color:margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444",marginLeft:5}}>{margin}%</span>
+                        </div>}
+                      </div>
+                    );
+                  })() : <span style={{fontSize:12,color:"#9CA3AF"}}>견적액 미입력</span>}
+                  <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}>
+                    <button onClick={()=>setEditing({...r})} style={{padding:"5px 10px",borderRadius:7,border:"1px solid #D1D5DB",background:"#fff",fontSize:12,cursor:"pointer"}}>✏️ 수정</button>
+                    <button onClick={()=>del(r.id)} style={{padding:"5px 10px",borderRadius:7,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.05)",color:"#EF4444",fontSize:12,cursor:"pointer"}}>🗑</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>}
+
+      {/* 자동 단가 조정 안내 */}
+      {/* 상세 보기 모달 */}
+      {viewing && (() => {
+        const r = viewing;
+        const tc = refTotalCost(r);
+        const profit = (Number(r.totalAmount)>0 && tc>0) ? Number(r.totalAmount)-tc : null;
+        const margin = profit!==null ? Math.round((profit/Number(r.totalAmount))*100) : null;
+        const Row = ({label, value, valueStyle})=> value ? (
+          <div style={{display:"flex",gap:12,padding:"8px 0",borderBottom:"1px solid #F3F4F6",alignItems:"flex-start"}}>
+            <span style={{fontSize:12,color:"#6B7280",flexShrink:0,width:110}}>{label}</span>
+            <span style={{fontSize:13,fontWeight:600,color:"#1A1A2E",...valueStyle}}>{value}</span>
+          </div>
+        ) : null;
+        return (
+          <div onClick={()=>setViewing(null)} style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,maxWidth:580,width:"100%",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+              {/* 모달 헤더 */}
+              <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #F3F4F6",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                <div>
+                  <h2 style={{margin:0,fontSize:18,fontWeight:900,color:"#1A1A2E"}}>{r.name}</h2>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:6}}>
+                    {r.year && <span style={{fontSize:11,color:"#6B7280",background:"#F3F4F6",padding:"2px 8px",borderRadius:20}}>{r.year}</span>}
+                    {r.client && <span style={{fontSize:11,color:"#6B7280",background:"#F3F4F6",padding:"2px 8px",borderRadius:20}}>{r.client}</span>}
+                    {r.videoType && <span style={{fontSize:11,color:"#6B9ECC",background:"rgba(107,158,204,0.1)",padding:"2px 8px",borderRadius:20}}>{r.videoType}</span>}
+                    {r.qualityGrade && <span style={{fontSize:11,color:"#34D399",background:"rgba(52,211,153,0.1)",padding:"2px 8px",borderRadius:20}}>{r.qualityGrade}등급</span>}
+                  </div>
+                </div>
+                <button onClick={()=>setViewing(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9CA3AF",lineHeight:1,flexShrink:0}}>×</button>
+              </div>
+
+              <div style={{padding:"16px 24px"}}>
+                {/* 재무 요약 카드 */}
+                {r.totalAmount && (
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
+                    <div style={{flex:1,minWidth:120,padding:"12px 14px",borderRadius:10,background:"rgba(200,16,46,0.06)",border:"1px solid rgba(200,16,46,0.15)",textAlign:"center"}}>
+                      <div style={{fontSize:10,color:"#6B7280",marginBottom:3}}>최종 견적액</div>
+                      <div style={{fontSize:16,fontWeight:900,color:"#C8102E"}}>₩{formatNum(Number(r.totalAmount))}</div>
+                    </div>
+                    {tc > 0 && <div style={{flex:1,minWidth:120,padding:"12px 14px",borderRadius:10,background:"#F8F9FA",border:"1px solid #E5E7EB",textAlign:"center"}}>
+                      <div style={{fontSize:10,color:"#6B7280",marginBottom:3}}>총 비용</div>
+                      <div style={{fontSize:16,fontWeight:900,color:"#374151"}}>₩{formatNum(tc)}</div>
+                      {(Number(r.internalCost||0)>0 || Number(r.externalCost||0)>0) && (
+                        <div style={{marginTop:4,fontSize:10,color:"#9CA3AF"}}>
+                          내부 ₩{formatNum(Number(r.internalCost||0))} + 외주 ₩{formatNum(Number(r.externalCost||0))}
+                        </div>
+                      )}
+                    </div>}
+                    {profit!==null && <div style={{flex:1,minWidth:120,padding:"12px 14px",borderRadius:10,background:profit>=0?"rgba(52,211,153,0.08)":"rgba(239,68,68,0.06)",border:`1px solid ${profit>=0?"rgba(52,211,153,0.25)":"rgba(239,68,68,0.2)"}`,textAlign:"center"}}>
+                      <div style={{fontSize:10,color:"#6B7280",marginBottom:3}}>영업이익 (이익률)</div>
+                      <div style={{fontSize:16,fontWeight:900,color:profit>=0?"#059669":"#EF4444"}}>{profit>=0?"+":"-"}₩{formatNum(Math.abs(profit))}</div>
+                      <div style={{fontSize:11,fontWeight:700,color:margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444"}}>{margin}%</div>
+                    </div>}
+                  </div>
+                )}
+
+                {/* 상세 필드 */}
+                {Number(r.internalCost||0)>0 && <Row label="내부 비용" value={`₩${formatNum(Number(r.internalCost))}`} />}
+                {Number(r.externalCost||0)>0 && <Row label="외주 비용" value={`₩${formatNum(Number(r.externalCost))}`} />}
+                {tc>0 && (Number(r.internalCost||0)>0 || Number(r.externalCost||0)>0) && <Row label="총 비용 합계" value={`₩${formatNum(tc)}`} valueStyle={{fontWeight:800}} />}
+                <Row label="영상 유형" value={r.videoType} />
+                <Row label="품질 등급" value={r.qualityGrade ? `${r.qualityGrade}등급` : null} />
+                <Row label="영상 길이" value={r.duration ? `${r.duration}초 (${r.fps||24}fps)` : null} />
+                <Row label="해상도" value={r.resolution ? (r.resolution.includes("3840")?"4K 3840×2160":"FHD 1920×1080") : null} />
+                <Row label="제작 기간" value={r.productionDays ? `${r.productionDays}일` : null} />
+                <Row label="클라이언트 난이도" value={r.clientDifficulty}
+                  valueStyle={{color: r.clientDifficulty==="매우 어려움"?"#EF4444":r.clientDifficulty==="어려움"?"#F59E0B":r.clientDifficulty==="쉬움"?"#34D399":"#374151"}} />
+                {((Number(r.charCount)||0)+(Number(r.propCount)||0)+(Number(r.bgCount)||0)) > 0 && (
+                  <Row label="에셋 구성" value={`캐릭터 ${r.charCount||0}종 · 프랍 ${r.propCount||0}종 · 배경 ${r.bgCount||0}종`} />
+                )}
+                {r.notes && <Row label="메모" value={r.notes} />}
+                {r.videoUrl && (
+                  <div style={{display:"flex",gap:12,padding:"10px 0",alignItems:"center"}}>
+                    <span style={{fontSize:12,color:"#6B7280",flexShrink:0,width:110}}>영상 링크</span>
+                    <a href={r.videoUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:13,color:"#3B82C4",textDecoration:"none",fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+                      🎬 영상 보기 →
+                    </a>
+                  </div>
+                )}
+
+                {/* 하단 버튼 */}
+                <div style={{display:"flex",gap:8,marginTop:20,paddingTop:16,borderTop:"1px solid #F3F4F6"}}>
+                  <button onClick={()=>{setEditing({...r});setViewing(null);}} style={{padding:"9px 18px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>✏️ 수정</button>
+                  <button onClick={()=>{del(r.id);setViewing(null);}} style={{padding:"9px 14px",borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.05)",color:"#EF4444",fontSize:13,cursor:"pointer"}}>🗑 삭제</button>
+                  <button onClick={()=>setViewing(null)} style={{marginLeft:"auto",padding:"9px 20px",borderRadius:8,border:"none",background:"#1A1A2E",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>닫기</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <div style={{marginTop:28,padding:"18px 20px",borderRadius:12,background:"#F8F9FA",border:"1px solid #E5E7EB"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+          <span style={{fontSize:15}}>⚙️</span>
+          <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#1A1A2E"}}>레퍼런스 기반 자동 단가 조정 안내</h3>
+        </div>
+
+        {/* 동작 흐름 */}
+        <div style={{display:"flex",gap:0,flexWrap:"wrap",marginBottom:16,alignItems:"center"}}>
+          {[
+            ["⚡","자동계산 클릭"],
+            ["→",""],
+            ["🔍","유사 레퍼런스 탐색\n(유사도 40점 이상)"],
+            ["→",""],
+            ["📋","모달에서 과거 실적 확인"],
+            ["→",""],
+            ["✅","참고 완료 클릭"],
+            ["→",""],
+            ["📊","이익률 분석 후\n단가 자동 조정"],
+          ].map(([icon, label], i) =>
+            icon === "→"
+              ? <span key={i} style={{fontSize:16,color:"#D1D5DB",margin:"0 6px"}}>→</span>
+              : <div key={i} style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:600,color:"#374151",textAlign:"center",whiteSpace:"pre-line",lineHeight:1.4}}>{icon} {label}</div>
+          )}
+        </div>
+
+        {/* 조정 로직 */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:8}}>조정 기준</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"#6B7280"}}>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <span style={{color:"#C8102E",fontWeight:700,flexShrink:0}}>①</span>
+              <span><strong style={{color:"#374151"}}>대상 레퍼런스</strong> — 유사도 40점 이상이면서 <em>최종 견적액</em>과 <em>실 제작 비용</em>이 모두 입력된 항목만 분석합니다.</span>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <span style={{color:"#C8102E",fontWeight:700,flexShrink:0}}>②</span>
+              <span><strong style={{color:"#374151"}}>가중 평균 이익률 계산</strong> — 유사도 점수를 가중치로 삼아 평균 이익률을 산출합니다. 유사도가 높을수록 해당 레퍼런스의 영향이 커집니다.</span>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <span style={{color:"#C8102E",fontWeight:700,flexShrink:0}}>③</span>
+              <span><strong style={{color:"#374151"}}>목표 이익률 25%</strong> — 평균 이익률이 25% 미만일 때만 상향 조정이 적용됩니다. 이미 25% 이상이면 조정 없음.</span>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <span style={{color:"#C8102E",fontWeight:700,flexShrink:0}}>④</span>
+              <span><strong style={{color:"#374151"}}>조정 폭</strong> — 부족분의 80%를 단가에 반영하며, 최대 40%까지만 올립니다. 과도한 상향을 방지하기 위한 상한선입니다.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 계산 예시 */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:8}}>계산 예시</div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {[
+              {label:"이익률 5% (목표 대비 20%p 부족)", result:"단가 16% 상향", color:"#F59E0B", bg:"rgba(245,158,11,0.08)"},
+              {label:"이익률 -10% (적자, 35%p 부족)", result:"단가 28% 상향", color:"#EF4444", bg:"rgba(239,68,68,0.08)"},
+              {label:"이익률 30% (목표 초과)", result:"조정 없음", color:"#34D399", bg:"rgba(52,211,153,0.08)"},
+            ].map(({label, result, color, bg})=>(
+              <div key={label} style={{flex:"1 1 180px",padding:"10px 14px",borderRadius:8,background:bg,border:`1px solid ${color}33`}}>
+                <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{label}</div>
+                <div style={{fontSize:13,fontWeight:800,color}}>{result}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{fontSize:11,color:"#9CA3AF",borderTop:"1px solid #E5E7EB",paddingTop:10}}>
+          💡 조정된 단가는 견적 탭에서 항목별로 확인하고 수동 수정할 수 있습니다. 단가 조정 시 상단에 주황색 배너가 표시되며, 배너의 × 버튼으로 알림을 닫을 수 있습니다.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── 유사 프로젝트 모달 ────────────────────────────────────────────────── */
+function SimilarityModal({matches, onProceed, onCancel}) {
+  const ovl = {position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",padding:20};
+  const box = {background:"#fff",borderRadius:16,maxWidth:680,width:"100%",maxHeight:"80vh",overflowY:"auto",padding:28,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"};
+  return (
+    <div style={ovl}>
+      <div style={box}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
+          <div>
+            <h2 style={{margin:0,fontSize:18,fontWeight:900,color:"#1A1A2E"}}>📚 유사한 과거 프로젝트 발견</h2>
+            <p style={{margin:"6px 0 0",fontSize:13,color:"#6B7280"}}>아래 레퍼런스를 참고하여 현재 견적이 적절한지 확인하세요.</p>
+          </div>
+          <button onClick={onCancel} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9CA3AF",lineHeight:1}}>×</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:22}}>
+          {matches.map(({ref, score})=>{
+            const assets = (Number(ref.charCount)||0)+(Number(ref.propCount)||0)+(Number(ref.bgCount)||0);
+            const barColor = score>=70?"#34D399":score>=50?"#F59E0B":"#9CA3AF";
+            return (
+              <div key={ref.id} style={{border:"1px solid #E5E7EB",borderRadius:12,padding:"14px 16px",background:"#F8F9FA"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                      <span style={{fontWeight:800,fontSize:14}}>{ref.name}</span>
+                      {ref.year && <span style={{fontSize:11,color:"#6B7280",background:"#E5E7EB",padding:"1px 7px",borderRadius:20}}>{ref.year}</span>}
+                      {ref.client && <span style={{fontSize:12,color:"#6B7280"}}>{ref.client}</span>}
+                    </div>
+                    <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:"#6B7280"}}>
+                      {ref.videoType && <span>📹 {ref.videoType}</span>}
+                      {ref.duration && <span>⏱ {ref.duration}초</span>}
+                      {ref.productionDays && <span>📅 제작 {ref.productionDays}일</span>}
+                      {ref.clientDifficulty && ref.clientDifficulty!=="보통" && (
+                        <span style={{color: ref.clientDifficulty==="매우 어려움"?"#EF4444":ref.clientDifficulty==="어려움"?"#F59E0B":"#34D399"}}>
+                          🧑‍💼 {ref.clientDifficulty}
+                        </span>
+                      )}
+                      {ref.qualityGrade && <span>⭐ {ref.qualityGrade}등급</span>}
+                      {assets > 0 && <span>👤 에셋 {assets}종</span>}
+                      {ref.fps && <span>🎬 {ref.fps}fps</span>}
+                    </div>
+                    {ref.videoUrl && (
+                      <div style={{marginTop:6}}>
+                        <a href={ref.videoUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:"#3B82C4",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>🎬 영상 보기</a>
+                      </div>
+                    )}
+                    {ref.notes && <div style={{marginTop:4,fontSize:11,color:"#9CA3AF",fontStyle:"italic"}}>{ref.notes}</div>}
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0,display:"flex",flexDirection:"column",gap:4}}>
+                    {ref.totalAmount ? (() => {
+                      const rtc = refTotalCost(ref);
+                      const profit = rtc > 0 ? Number(ref.totalAmount) - rtc : null;
+                      const margin = profit !== null ? Math.round((profit / Number(ref.totalAmount)) * 100) : null;
+                      return (<>
+                        <div><div style={{fontSize:10,color:"#6B7280"}}>최종 견적액</div><div style={{fontWeight:900,fontSize:16,color:"#C8102E"}}>₩{formatNum(Number(ref.totalAmount))}</div></div>
+                        {rtc > 0 && <div><div style={{fontSize:10,color:"#6B7280"}}>총 비용</div><div style={{fontWeight:700,fontSize:13,color:"#374151"}}>₩{formatNum(rtc)}</div>
+                          {(Number(ref.internalCost||0)>0||Number(ref.externalCost||0)>0) && <div style={{fontSize:9,color:"#9CA3AF"}}>내부 ₩{formatNum(Number(ref.internalCost||0))} + 외주 ₩{formatNum(Number(ref.externalCost||0))}</div>}
+                        </div>}
+                        {profit !== null && <div style={{padding:"3px 8px",borderRadius:6,background:profit>=0?"rgba(52,211,153,0.12)":"rgba(239,68,68,0.08)"}}>
+                          <div style={{fontSize:10,color:"#6B7280"}}>영업이익</div>
+                          <span style={{fontSize:12,fontWeight:800,color:profit>=0?"#059669":"#EF4444"}}>{profit>=0?"+":"-"}₩{formatNum(Math.abs(profit))}</span>
+                          <span style={{fontSize:11,color:margin>=20?"#059669":margin>=0?"#F59E0B":"#EF4444",marginLeft:4}}>{margin}%</span>
+                        </div>}
+                      </>);
+                    })() : <span style={{fontSize:12,color:"#9CA3AF"}}>견적액 미입력</span>}
+                  </div>
+                </div>
+                <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:11,color:"#6B7280",whiteSpace:"nowrap"}}>유사도</span>
+                  <div style={{flex:1,height:6,background:"#E5E7EB",borderRadius:3,overflow:"hidden"}}>
+                    <div style={{width:`${score}%`,height:"100%",background:barColor,borderRadius:3,transition:"width 0.4s"}} />
+                  </div>
+                  <span style={{fontSize:12,fontWeight:700,color:barColor,minWidth:36,textAlign:"right"}}>{score}%</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onCancel} style={{padding:"10px 20px",borderRadius:9,border:"1px solid #D1D5DB",background:"#fff",fontSize:13,cursor:"pointer"}}>취소</button>
+          <button onClick={onProceed} style={{padding:"10px 22px",borderRadius:9,border:"none",background:"#C8102E",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>참고 완료 — 자동계산 진행</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const TABS = [
+  {id:"info",      label:"프로젝트 정보", icon:"📁"},
+  {id:"schedule",  label:"스케줄",        icon:"📅"},
+  {id:"quote",     label:"견적",          icon:"💰"},
+  {id:"standards", label:"기준표",        icon:"📋"},
+  {id:"staff",     label:"내부인원",      icon:"👥"},
+  {id:"reference", label:"레퍼런스",      icon:"📚"},
+  {id:"summary",   label:"요약",          icon:"📊"}
+];
+
+function App() {
+  const [activeTab,  setActiveTab]  = useState("info");
+  const [project,  setProject]  = useState(DEFAULT_PROJECT);
+  const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
+  const [quote,    setQuote]    = useState(DEFAULT_QUOTE);
+  const [projects,   setProjects]   = useState([]);
+  const [showSaved,  setShowSaved]  = useState(false);
+  const [ganttStart, setGanttStart] = useState(() => new Date().toISOString().slice(0,10));
+  const [ganttEnd,   setGanttEnd]   = useState(() => addDays(new Date().toISOString().slice(0,10), 60));
+  const [allStandards, setAllStandards] = useState(() => {
+    const mergeStds = (loaded, def) => {
+      if (!loaded) return def;
+      const mergeArr = (loadedArr, defArr) => {
+        const ids = new Set((loadedArr||[]).map(r=>r.id));
+        const missing = (defArr||[]).filter(r=>!ids.has(r.id));
+        return missing.length ? [...(loadedArr||[]), ...missing] : (loadedArr||defArr);
+      };
+      return {
+        ...loaded,
+        production:    mergeArr(loaded.production,    def.production),
+        asset:         mergeArr(loaded.asset,         def.asset),
+        preproduction: mergeArr(loaded.preproduction, def.preproduction),
+      };
+    };
+    try {
+      const s=localStorage.getItem("locus_all_standards");
+      if(s) {
+        const loaded=JSON.parse(s);
+        return {
+          cinematic: mergeStds(loaded.cinematic, DEFAULT_ALL_STANDARDS.cinematic),
+          animation: mergeStds(loaded.animation,  DEFAULT_ALL_STANDARDS.animation),
+        };
+      }
+    } catch{}
+    return DEFAULT_ALL_STANDARDS;
+  });
+  useEffect(()=>{ try{localStorage.setItem("locus_all_standards",JSON.stringify(allStandards));}catch{} },[allStandards]);
+
+  const [internalStaff, setInternalStaff] = useState(() => {
+    try { const s=localStorage.getItem("locus_internal_staff"); if(s) return {...DEFAULT_INTERNAL_STAFF,...JSON.parse(s)}; } catch{}
+    return DEFAULT_INTERNAL_STAFF;
+  });
+  useEffect(()=>{ try{localStorage.setItem("locus_internal_staff",JSON.stringify(internalStaff));}catch{} },[internalStaff]);
+
+  const [referenceProjects, setReferenceProjects] = useState(() => {
+    try { const s=localStorage.getItem("locus_references"); if(s) return JSON.parse(s); } catch{}
+    return [];
+  });
+  useEffect(()=>{ try{localStorage.setItem("locus_references",JSON.stringify(referenceProjects));}catch{} },[referenceProjects]);
+
+  const [similarityMatches, setSimilarityMatches] = useState(null); // null | [{ref,score}]
+  const [confirmedMatches, setConfirmedMatches] = useState(null);
+  const [pendingAutoCalc, setPendingAutoCalc] = useState(false);
+  const [appliedMarkup, setAppliedMarkup] = useState(null); // null | {factor, avgMargin, upliftPct, refNames}
+
+  useEffect(() => {
+    if (project.deadline) {
+      const st = project.startDate || new Date().toISOString().slice(0,10);
+      if (project.deadline > st) setGanttEnd(project.deadline);
+    }
+  }, [project.deadline, project.startDate]);
+
+  const updateProject  = useCallback((f,v)=>setProject(p=>({...p,[f]:v})),[]);
+  const updateSchedule = useCallback((f,v)=>{
+    setSchedule(p=>{
+      const next={...p,[f]:v};
+      if (f==="phases") setQuote(q=>({...q,items:syncQuoteFromSchedule(v,q.items)}));
+      return next;
+    });
+  },[]);
+  const updateQuote = useCallback((f,v)=>setQuote(p=>({...p,[f]:v})),[]);
+
+  const runAutoCalc = useCallback((matchesForMarkup = null)=>{
+    const start = project.startDate || ganttStart;
+    const stdKey = project.videoType === "3D 애니메이션" ? "animation" : "cinematic";
+    const activeStds = allStandards[stdKey] || allStandards.cinematic;
+    const {phases, headcounts} = calcAutoSchedule(project, activeStds, start, internalStaff);
+    if (phases.length===0) { alert("프로젝트 정보(총 길이, 캐릭터 수 등)를 먼저 입력하세요."); return; }
+    setSchedule(prev=>({...prev, phases}));
+    const lastEnd = phases.reduce((mx, p) => p.endDate > mx ? p.endDate : mx, start);
+    const newEnd  = (project.deadline && project.deadline > lastEnd) ? project.deadline : addDays(lastEnd, 7);
+    setGanttEnd(newEnd);
+    setGanttStart(start);
+
+    const markup = matchesForMarkup ? calcMarkupFactor(matchesForMarkup) : { factor: 1.0, avgMargin: null, upliftPct: 0 };
+    if (markup.upliftPct > 0) {
+      setAppliedMarkup({
+        ...markup,
+        refNames: matchesForMarkup.filter(m=>Number(m.ref.totalAmount)>0&&refTotalCost(m.ref)>0).map(m=>m.ref.name),
+      });
+    } else {
+      setAppliedMarkup(null);
+    }
+
+    setQuote(q=>({...q, items: syncQuoteFromSchedule(phases, q.items).map(item=>{
+      const roleId = item.roleId;
+      const phaseId = Object.entries(PHASE_ROLE_MAP).find(([,rid])=>rid===roleId)?.[0];
+      const hcMap = {modeling:"model",texture_shading:"lookDev",rigging:"rigging",animation_main:"anim",lighting_render:"lr",fx:"fx",simulation:"sim",composition:"comp",unreal:"unreal",motion_graphic:"mg"};
+      const hc = hcMap[phaseId];
+      const withHc = hc && headcounts[hc] ? {...item, headcount: headcounts[hc]} : item;
+      if (markup.factor > 1.0 && !getRole(withHc.roleId)?.isContingency) {
+        return {...withHc, rate: Math.round(withHc.rate * markup.factor / 1000) * 1000};
+      }
+      return withHc;
+    })}));
+  },[project, allStandards, ganttStart, internalStaff]);
+
+  const handleAutoCalc = useCallback(()=>{
+    if (referenceProjects.length > 0) {
+      const matches = referenceProjects
+        .map(ref => ({ref, score: calcSimilarity(ref, project)}))
+        .filter(m => m.score >= 40)
+        .sort((a,b) => b.score - a.score)
+        .slice(0, 3);
+      if (matches.length > 0) {
+        setSimilarityMatches(matches);
+        return;
+      }
+    }
+    runAutoCalc();
+  },[project, referenceProjects, runAutoCalc]);
+
+  useEffect(()=>{
+    if (pendingAutoCalc) {
+      setPendingAutoCalc(false);
+      const m = confirmedMatches;
+      setConfirmedMatches(null);
+      runAutoCalc(m);
+    }
+  },[pendingAutoCalc, runAutoCalc, confirmedMatches]);
+
+  const saveProject = () => {
+    const entry = {id:Date.now(),project,schedule,quote,savedAt:new Date().toLocaleString("ko-KR")};
+    setProjects(prev=>[entry,...prev]);
+    alert(`"${project.name||"무제 프로젝트"}" 저장 완료!`);
+  };
+  const loadProjectEntry = entry => {
+    setProject(entry.project); setSchedule(entry.schedule); setQuote(entry.quote);
+    setShowSaved(false); setActiveTab("info");
+  };
+  const newProject = () => {
+    if (window.confirm("새 프로젝트를 시작하면 현재 내용이 초기화됩니다.")) {
+      setProject(DEFAULT_PROJECT); setSchedule(DEFAULT_SCHEDULE); setQuote(DEFAULT_QUOTE); setActiveTab("info"); setAppliedMarkup(null);
+    }
+  };
+
+  const btnBase = {borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",border:"none"};
+
+  return (
+    <div style={{minHeight:"100vh",background:"#F4F5F7",color:"#1A1A2E"}}>
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(ellipse 70% 40% at 50% -10%, rgba(200,16,46,0.06) 0%, transparent 70%)"}} />
+      <div style={{position:"relative",zIndex:1,maxWidth:1800,margin:"0 auto",padding:"28px 32px"}}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#C8102E",boxShadow:"0 0 8px #C8102E"}} />
+              <span style={{fontSize:11,color:"#C8102E",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.15em"}}>Animation Studio</span>
+            </div>
+            <h1 style={{margin:0,fontSize:22,fontWeight:900,letterSpacing:"-0.02em",lineHeight:1.1,color:"#1A1A2E"}}>
+              Schedule & <span style={{color:"#C8102E"}}>Quote Tool</span>
+            </h1>
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end",alignItems:"center"}}>
+            <button onClick={()=>setShowSaved(s=>!s)} style={{...btnBase,background:"#F8F9FA",color:"#6B7280",border:"1px solid #E5E7EB",fontWeight:400}}>
+              📂 저장 목록 ({projects.length})
+            </button>
+            <button onClick={()=>downloadPDF(project,schedule,quote)} style={{...btnBase,background:"rgba(107,158,204,0.15)",color:"#3B82C4",border:"1px solid rgba(107,158,204,0.35)"}}>
+              📄 PDF 출력
+            </button>
+            <button onClick={saveProject} style={{...btnBase,background:"rgba(52,211,153,0.15)",color:"#059669",border:"1px solid rgba(52,211,153,0.3)"}}>
+              💾 저장
+            </button>
+            <button onClick={newProject} style={{...btnBase,background:"#C8102E",color:"#fff"}}>
+              + 새 프로젝트
+            </button>
+          </div>
+        </div>
+
+        {/* 저장 목록 패널 */}
+        {showSaved && (
+          <Card style={{marginBottom:20}}>
+            <h3 style={{margin:"0 0 14px",color:"#C8102E",fontSize:14,fontWeight:700}}>저장된 프로젝트</h3>
+            {projects.length===0
+              ? <p style={{color:"#6B7280",fontSize:13}}>아직 저장된 프로젝트가 없습니다.</p>
+              : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {projects.map(entry=>(
+                    <div key={entry.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderRadius:10,background:"#F8F9FA",border:"1px solid #E5E7EB"}}>
+                      <div>
+                        <div style={{fontWeight:700,fontSize:14}}>{entry.project.name||"무제 프로젝트"}</div>
+                        <div style={{fontSize:11,color:"#6B7280"}}>{entry.project.client&&`${entry.project.client} · `}{entry.savedAt}</div>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>loadProjectEntry(entry)} style={{...btnBase,background:"#C8102E",color:"#fff",padding:"6px 14px"}}>불러오기</button>
+                        <button onClick={()=>{if(window.confirm(`"${entry.project.name||"무제 프로젝트"}"를 삭제하시겠습니까?`))setProjects(prev=>prev.filter(p=>p.id!==entry.id));}} style={{...btnBase,background:"rgba(239,68,68,0.1)",color:"#EF4444",border:"1px solid rgba(239,68,68,0.25)",padding:"6px 10px"}}>🗑</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>}
+          </Card>
+        )}
+
+        {/* 현재 프로젝트 배지 */}
+        {project.name && (
+          <div style={{marginBottom:16,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <span style={{fontSize:12,color:"#6B7280"}}>현재:</span>
+            <Tag color="#C8102E">{project.name}</Tag>
+            {project.client && <Tag color="#9CA3AF">{project.client}</Tag>}
+            {project.videoType && <Tag color="#6B9ECC">{project.videoType}</Tag>}
+            {project.deadline && <Tag color="#34D399">납품 {project.deadline}</Tag>}
+          </div>
+        )}
+
+        {/* 탭 */}
+        <div style={{display:"flex",gap:4,marginBottom:24,background:"#FFFFFF",padding:4,borderRadius:12,border:"1px solid #E5E7EB",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+          {TABS.map(tab=>(
+            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{flex:1,padding:"10px 8px",borderRadius:9,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,transition:"all 0.2s",background:activeTab===tab.id?"#C8102E":"transparent",color:activeTab===tab.id?"#fff":"#374151"}}>
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 단가 상향 조정 배너 */}
+        {appliedMarkup && (
+          <div style={{marginBottom:16,padding:"12px 16px",borderRadius:10,background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.35)",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:13,color:"#D97706",marginBottom:3}}>
+                ⚠️ 리스크 반영 — 단가 {appliedMarkup.upliftPct}% 상향 조정됨
+              </div>
+              <div style={{fontSize:12,color:"#6B7280"}}>
+                유사 레퍼런스
+                {appliedMarkup.refNames.length > 0 && <> (<strong>{appliedMarkup.refNames.join(", ")}</strong>)</>}의
+                평균 이익률이 <strong style={{color: appliedMarkup.avgMargin < 0 ? "#EF4444" : "#F59E0B"}}>{appliedMarkup.avgMargin}%</strong>로
+                목표(25%)보다 낮아 견적 단가를 자동으로 상향했습니다. 견적 탭에서 수동 조정 가능합니다.
+              </div>
+            </div>
+            <button onClick={()=>setAppliedMarkup(null)} style={{background:"none",border:"none",color:"#9CA3AF",cursor:"pointer",fontSize:18,lineHeight:1,flexShrink:0}}>×</button>
+          </div>
+        )}
+
+        {/* 탭 콘텐츠 */}
+        {activeTab==="info"      && <ProjectInfoTab project={project} onChange={updateProject} />}
+        {activeTab==="schedule"  && <ScheduleTab schedule={schedule} onChange={updateSchedule} project={project} standards={allStandards[project.videoType==="3D 애니메이션"?"animation":"cinematic"]} projectStart={project.startDate} ganttStart={ganttStart} setGanttStart={setGanttStart} ganttEnd={ganttEnd} setGanttEnd={setGanttEnd} onAutoCalc={handleAutoCalc} />}
+        {activeTab==="quote"     && <QuoteTab quote={quote} onChange={updateQuote} userCanEditRate={true} />}
+        {activeTab==="standards" && <StandardsTab allStandards={allStandards} onChange={setAllStandards} />}
+        {activeTab==="staff"     && <InternalStaffTab internalStaff={internalStaff} onChange={setInternalStaff} />}
+        {activeTab==="reference" && <ReferenceTab refs={referenceProjects} onChange={setReferenceProjects} />}
+        {activeTab==="summary"   && <SummaryTab project={project} schedule={schedule} quote={quote} />}
+
+        {/* 유사 레퍼런스 모달 */}
+        {similarityMatches && (
+          <SimilarityModal
+            matches={similarityMatches}
+            onProceed={()=>{ setConfirmedMatches(similarityMatches); setSimilarityMatches(null); setPendingAutoCalc(true); }}
+            onCancel={()=>{ setSimilarityMatches(null); setPendingAutoCalc(false); }}
+          />
+        )}
+
+        {/* 하단 네비게이션 */}
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>
+          <button onClick={()=>{const i=TABS.findIndex(t=>t.id===activeTab);if(i>0)setActiveTab(TABS[i-1].id);}}
+            disabled={activeTab===TABS[0].id}
+            style={{...btnBase,background:"#F8F9FA",color:"#6B7280",border:"1px solid #E5E7EB",fontWeight:400,opacity:activeTab===TABS[0].id?0.35:1}}>← 이전</button>
+          {activeTab!==TABS[TABS.length-1].id && (
+            <button onClick={()=>{const i=TABS.findIndex(t=>t.id===activeTab);if(i<TABS.length-1)setActiveTab(TABS[i+1].id);}}
+              style={{...btnBase,background:"#C8102E",color:"#fff"}}>다음 →</button>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
